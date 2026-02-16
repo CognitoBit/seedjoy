@@ -1,0 +1,626 @@
+/**
+ * SeedJoy Main Application
+ * 
+ * Handles UI initialization and event handling
+ */
+
+let ble = null;
+let config = null;
+let calibration = null;
+
+// Initialize application
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('SeedJoy Configurator starting...');
+    
+    // Initialize modules
+    ble = new SeedJoyBLE();
+    config = new SeedJoyConfig();
+    calibration = new CalibrationManager(ble, config);
+    
+    // Set up connection callbacks
+    ble.onConnectionChange = handleConnectionChange;
+    ble.onBatteryChange = handleBatteryChange;
+    ble.onButtonData = handleButtonData; // live button updates
+    
+    // Initialize UI
+    initializeUI();
+    initializeTabs();
+    initializePinConfiguration();
+    initializeAxisCalibration();
+    initializeButtonMapping();
+    initializeAdvancedSettings();
+    initializeActionButtons();
+    
+    // Load config from localStorage if available
+    loadLocalConfig();
+    
+    console.log('SeedJoy Configurator ready!');
+});
+
+/**
+ * Initialize UI components
+ */
+function initializeUI() {
+    // Check WebBluetooth support
+    if (!navigator.bluetooth) {
+        alert('WebBluetooth is not supported in this browser. Please use Chrome, Edge, or Opera.');
+        document.getElementById('connect-btn').disabled = true;
+    }
+}
+
+/**
+ * Initialize tab switching
+ */
+function initializeTabs() {
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const tabName = button.getAttribute('data-tab');
+            
+            // Update tab buttons
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            
+            // Update tab contents
+            tabContents.forEach(content => content.classList.remove('active'));
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+            
+            // Start/stop calibration monitoring based on active tab
+            if (tabName === 'axes') {
+                calibration.startMonitoring();
+            } else {
+                calibration.stopMonitoring();
+            }
+        });
+    });
+}
+
+/**
+ * Initialize pin configuration UI
+ */
+function initializePinConfiguration() {
+    const axisPins = document.getElementById('axis-pins');
+    const buttonPins = document.getElementById('button-pins');
+    const availablePins = SeedJoyConfig.getAvailablePins();
+    
+    // Generate axis pin selectors
+    for (let i = 0; i < 4; i++) {
+        const div = createPinSelector(`Axis ${i}`, `axis-pin-${i}`, availablePins, config.getConfig().axes[i].pin);
+        axisPins.appendChild(div);
+    }
+    
+    // Generate button pin selectors
+    for (let i = 0; i < 16; i++) {
+        const div = createPinSelector(`Button ${i}`, `button-pin-${i}`, availablePins, config.getConfig().buttons[i].pin);
+        buttonPins.appendChild(div);
+    }
+}
+
+/**
+ * Create pin selector UI element
+ */
+function createPinSelector(label, id, options, selectedValue) {
+    const div = document.createElement('div');
+    div.className = 'pin-selector';
+    
+    const labelEl = document.createElement('label');
+    labelEl.textContent = label;
+    
+    const select = document.createElement('select');
+    select.id = id;
+    
+    options.forEach(opt => {
+        const option = document.createElement('option');
+        option.value = opt.value;
+        option.textContent = opt.label;
+        if (opt.value === selectedValue) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    });
+    
+    div.appendChild(labelEl);
+    div.appendChild(select);
+    
+    return div;
+}
+
+/**
+ * Populate a pin dropdown with available pins
+ */
+function populatePinDropdown(elementId, pins, selectedValue) {
+    const select = document.getElementById(elementId);
+    // Clear existing options except the first one (if any)
+    select.innerHTML = '';
+    
+    pins.forEach(pin => {
+        const option = document.createElement('option');
+        option.value = pin.value;
+        option.textContent = pin.label;
+        if (pin.value === selectedValue) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    });
+}
+
+/**
+ * Initialize axis calibration UI
+ */
+function initializeAxisCalibration() {
+    // Axis selector
+    const axisSelect = document.getElementById('calibration-axis');
+    axisSelect.addEventListener('change', (e) => {
+        calibration.setCurrentAxis(parseInt(e.target.value));
+    });
+    
+    // Calibration buttons
+    document.getElementById('calibrate-min-btn').addEventListener('click', () => {
+        calibration.calibrateMin();
+    });
+    
+    document.getElementById('calibrate-center-btn').addEventListener('click', () => {
+        calibration.calibrateCenter();
+    });
+    
+    document.getElementById('calibrate-max-btn').addEventListener('click', () => {
+        calibration.calibrateMax();
+    });
+    
+    // Axis settings
+    document.getElementById('axis-inverted').addEventListener('change', (e) => {
+        const axisIndex = parseInt(document.getElementById('calibration-axis').value);
+        config.updateAxis(axisIndex, { inverted: e.target.checked });
+    });
+    
+    const deadzoneSlider = document.getElementById('deadzone-slider');
+    deadzoneSlider.addEventListener('input', (e) => {
+        document.getElementById('deadzone-value').textContent = e.target.value;
+        const axisIndex = parseInt(document.getElementById('calibration-axis').value);
+        config.updateAxis(axisIndex, { deadzone: parseInt(e.target.value) });
+    });
+    
+    const curveType = document.getElementById('curve-type');
+    curveType.addEventListener('change', (e) => {
+        const type = parseInt(e.target.value);
+        const axisIndex = parseInt(document.getElementById('calibration-axis').value);
+        config.updateAxis(axisIndex, { curveType: type });
+        
+        // Show/hide expo setting
+        document.getElementById('expo-setting').style.display = type === 1 ? 'block' : 'none';
+    });
+    
+    const expoSlider = document.getElementById('expo-slider');
+    expoSlider.addEventListener('input', (e) => {
+        const value = e.target.value / 100;
+        document.getElementById('expo-value').textContent = value.toFixed(2);
+        const axisIndex = parseInt(document.getElementById('calibration-axis').value);
+        config.updateAxis(axisIndex, { expoFactor: value });
+    });
+    
+    const smoothing = document.getElementById('smoothing-select');
+    smoothing.addEventListener('change', (e) => {
+        const axisIndex = parseInt(document.getElementById('calibration-axis').value);
+        config.updateAxis(axisIndex, { smoothing: parseInt(e.target.value) });
+    });
+}
+
+/**
+ * Initialize button mapping UI
+ */
+function initializeButtonMapping() {
+    const buttonGrid = document.querySelector('.button-grid');
+    const testGrid = document.getElementById('button-test-grid');
+    
+    // Generate button mapping UI
+    for (let i = 0; i < 16; i++) {
+        const item = document.createElement('div');
+        item.className = 'button-item';
+        item.innerHTML = `
+            <h4>Button ${i}</h4>
+            <label>
+                Logical Number:
+                <select id="button-logical-${i}">
+                    ${Array.from({length: 16}, (_, j) => 
+                        `<option value="${j}" ${j === i ? 'selected' : ''}>${j}</option>`
+                    ).join('')}
+                </select>
+            </label>
+            <label>
+                <input type="checkbox" id="button-invert-${i}"> Invert
+            </label>
+        `;
+        buttonGrid.appendChild(item);
+    }
+    
+    // Generate button test indicators
+    for (let i = 0; i < 16; i++) {
+        const indicator = document.createElement('div');
+        indicator.className = 'button-indicator';
+        indicator.id = `button-indicator-${i}`;
+        indicator.textContent = i;
+        testGrid.appendChild(indicator);
+    }
+}
+
+/**
+ * Initialize advanced settings UI
+ */
+function initializeAdvancedSettings() {
+    const cfg = config.getConfig();
+    
+    // Device settings
+    document.getElementById('device-name-input').value = cfg.deviceName;
+    document.getElementById('mode-select').value = cfg.mode;
+    
+    // USB settings
+    document.getElementById('usb-poll-rate').value = cfg.usbPollRate;
+    
+    // BLE settings
+    document.getElementById('ble-interval').value = cfg.bleConnInterval;
+    document.getElementById('ble-tx-power').value = cfg.bleTxPower;
+    
+    // Power management
+    document.getElementById('auto-sleep').checked = cfg.autoSleep;
+    document.getElementById('sleep-timeout').value = cfg.sleepTimeout;
+    
+    // Shift registers
+    document.getElementById('shift-reg-enabled').checked = cfg.shiftRegisters.enabled;
+    document.getElementById('shift-reg-chips').value = cfg.shiftRegisters.numChips;
+    document.getElementById('shift-reg-data-pin').value = cfg.shiftRegisters.dataPin;
+    document.getElementById('shift-reg-clock-pin').value = cfg.shiftRegisters.clockPin;
+    document.getElementById('shift-reg-load-pin').value = cfg.shiftRegisters.loadPin;
+    document.getElementById('shift-reg-inverted').checked = cfg.shiftRegisters.inverted;
+    
+    // Populate shift register pin selectors
+    const availablePins = SeedJoyConfig.getAvailablePins();
+    populatePinDropdown('shift-reg-data-pin', availablePins, cfg.shiftRegisters.dataPin);
+    populatePinDropdown('shift-reg-clock-pin', availablePins, cfg.shiftRegisters.clockPin);
+    populatePinDropdown('shift-reg-load-pin', availablePins, cfg.shiftRegisters.loadPin);
+    
+    // Add change listeners
+    document.getElementById('device-name-input').addEventListener('change', (e) => {
+        config.updateDeviceSettings({ deviceName: e.target.value });
+    });
+    
+    document.getElementById('mode-select').addEventListener('change', (e) => {
+        config.updateDeviceSettings({ mode: parseInt(e.target.value) });
+    });
+    
+    document.getElementById('usb-poll-rate').addEventListener('change', (e) => {
+        config.updateDeviceSettings({ usbPollRate: parseInt(e.target.value) });
+    });
+    
+    document.getElementById('ble-interval').addEventListener('change', (e) => {
+        config.updateDeviceSettings({ bleConnInterval: parseInt(e.target.value) });
+    });
+    
+    document.getElementById('ble-tx-power').addEventListener('change', (e) => {
+        config.updateDeviceSettings({ bleTxPower: parseInt(e.target.value) });
+    });
+    
+    document.getElementById('auto-sleep').addEventListener('change', (e) => {
+        config.updateDeviceSettings({ autoSleep: e.target.checked });
+    });
+    
+    document.getElementById('sleep-timeout').addEventListener('change', (e) => {
+        config.updateDeviceSettings({ sleepTimeout: parseInt(e.target.value) });
+    });
+    
+    // Shift register event listeners
+    document.getElementById('shift-reg-enabled').addEventListener('change', (e) => {
+        config.updateShiftRegisters({ enabled: e.target.checked });
+    });
+    
+    document.getElementById('shift-reg-chips').addEventListener('change', (e) => {
+        config.updateShiftRegisters({ numChips: parseInt(e.target.value) });
+    });
+    
+    document.getElementById('shift-reg-data-pin').addEventListener('change', (e) => {
+        config.updateShiftRegisters({ dataPin: parseInt(e.target.value) });
+    });
+    
+    document.getElementById('shift-reg-clock-pin').addEventListener('change', (e) => {
+        config.updateShiftRegisters({ clockPin: parseInt(e.target.value) });
+    });
+    
+    document.getElementById('shift-reg-load-pin').addEventListener('change', (e) => {
+        config.updateShiftRegisters({ loadPin: parseInt(e.target.value) });
+    });
+    
+    document.getElementById('shift-reg-inverted').addEventListener('change', (e) => {
+        config.updateShiftRegisters({ inverted: e.target.checked });
+    });
+}
+
+/**
+ * Initialize action buttons
+ */
+function initializeActionButtons() {
+    // Connect/Disconnect
+    document.getElementById('connect-btn').addEventListener('click', async () => {
+        try {
+            await ble.connect();
+        } catch (error) {
+            alert('Failed to connect: ' + error.message);
+        }
+    });
+    
+    document.getElementById('disconnect-btn').addEventListener('click', async () => {
+        await ble.disconnect();
+    });
+    
+    // Read/Write config
+    document.getElementById('read-config-btn').addEventListener('click', async () => {
+        try {
+            if (!ble.configReadCharacteristic) {
+                alert('Configuration service not available.\n\n' +
+                      'Please make sure you have uploaded the latest firmware with BLE config service support.');
+                return;
+            }
+            
+            showNotification('Reading Configuration', 'Downloading config from device...', 'info', 0);
+            
+            const deviceConfig = await ble.readConfig();
+            config.config = deviceConfig;
+            updateUIFromConfig();
+            
+            showNotification('Success', 'Configuration loaded from device', 'success', 3000);
+        } catch (error) {
+            showNotification('Error', 'Failed to read config: ' + error.message, 'error', 5000);
+            console.error('Read config error:', error);
+        }
+    });
+    
+    document.getElementById('write-config-btn').addEventListener('click', async () => {
+        if (!ble.configWriteCharacteristic) {
+            alert('Configuration service not available.\n\n' +
+                  'Please make sure you have uploaded the latest firmware with BLE config service support.');
+            return;
+        }
+        
+        if (confirm('Write configuration to device? This will overwrite existing settings and save to Flash.')) {
+            try {
+                showNotification('Writing Configuration', 'Uploading config to device...', 'info', 0);
+                
+                await ble.writeConfig(config.getConfig());
+                
+                showNotification('Success', 'Configuration written to device and saved to Flash', 'success', 3000);
+            } catch (error) {
+                showNotification('Error', 'Failed to write config: ' + error.message, 'error', 5000);
+                console.error('Write config error:', error);
+            }
+        }
+    });
+    
+    // Reset to defaults
+    document.getElementById('reset-config-btn').addEventListener('click', () => {
+        if (confirm('Reset to default configuration? This will discard all your settings.')) {
+            config.resetToDefaults();
+            updateUIFromConfig();
+            alert('Configuration reset to defaults');
+        }
+    });
+    
+    // Export/Import config
+    document.getElementById('export-config-btn').addEventListener('click', () => {
+        config.exportToFile();
+    });
+    
+    document.getElementById('import-config-btn').addEventListener('click', () => {
+        document.getElementById('import-file-input').click();
+    });
+    
+    document.getElementById('import-file-input').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            try {
+                await config.importFromFile(file);
+                updateUIFromConfig();
+                alert('Configuration imported successfully');
+            } catch (error) {
+                alert('Failed to import config: ' + error.message);
+            }
+        }
+    });
+}
+
+/**
+ * Handle connection state change
+ */
+function handleConnectionChange(connected) {
+    const statusIndicator = document.getElementById('status-indicator');
+    const statusText = document.getElementById('status-text');
+    const deviceInfo = document.getElementById('device-info');
+    const connectBtn = document.getElementById('connect-btn');
+    const disconnectBtn = document.getElementById('disconnect-btn');
+    const readBtn = document.getElementById('read-config-btn');
+    const writeBtn = document.getElementById('write-config-btn');
+    
+    if (connected) {
+        statusIndicator.classList.add('connected');
+        statusIndicator.classList.remove('disconnected');
+        statusText.textContent = 'Connected';
+        deviceInfo.style.display = 'block';
+        connectBtn.style.display = 'none';
+        disconnectBtn.style.display = 'inline-block';
+        readBtn.disabled = false;
+        writeBtn.disabled = false;
+        
+        document.getElementById('device-name').textContent = ble.getDeviceName();
+        document.getElementById('firmware-version').textContent = '0.1.0'; // From status
+        
+        // Show configuration mode notice
+        showNotification(
+            'Configuration Mode Active', 
+            'The device is in configuration mode for 10 seconds. HID input is disabled to prevent unwanted keystrokes/mouse movements. Hold the MODE button or send "C" via serial to stay in config mode.',
+            'info',
+            10000
+        );
+    } else {
+        statusIndicator.classList.remove('connected');
+        statusIndicator.classList.add('disconnected');
+        statusText.textContent = 'Not Connected';
+        deviceInfo.style.display = 'none';
+        connectBtn.style.display = 'inline-block';
+        disconnectBtn.style.display = 'none';
+        readBtn.disabled = true;
+        writeBtn.disabled = true;
+
+        // Clear live button indicators when disconnected
+        for (let i = 0; i < 16; i++) {
+            const el = document.getElementById(`button-indicator-${i}`);
+            if (el) el.classList.remove('pressed');
+        }
+    }
+}
+
+/**
+ * Handle battery level change
+ */
+function handleBatteryChange(batteryLevel) {
+    document.getElementById('battery-level').textContent = `${batteryLevel}%`;
+}
+
+/**
+ * Handle real-time button updates from BLE
+ */
+function handleButtonData(data) {
+    // data.bitmask is a 16-bit bitmask (bit 0 = Button 0)
+    for (let i = 0; i < 16; i++) {
+        const el = document.getElementById(`button-indicator-${i}`);
+        if (!el) continue;
+        const pressed = ((data.bitmask >> i) & 0x1) === 1;
+        el.classList.toggle('pressed', pressed);
+    }
+}
+
+/**
+ * Update UI from current configuration
+ */
+function updateUIFromConfig() {
+    const cfg = config.getConfig();
+    
+    // Update all UI elements to match config
+    // This is a simplified version - full implementation would update all fields
+    
+    document.getElementById('device-name-input').value = cfg.deviceName;
+    document.getElementById('mode-select').value = cfg.mode;
+    
+    console.log('UI updated from configuration');
+}
+
+/**
+ * Load config from localStorage
+ */
+function loadLocalConfig() {
+    try {
+        const savedConfig = localStorage.getItem('seedjoy-config');
+        if (savedConfig) {
+            const parsed = JSON.parse(savedConfig);
+            if (config.validateConfig(parsed)) {
+                config.config = parsed;
+                updateUIFromConfig();
+                console.log('Loaded configuration from localStorage');
+            }
+        }
+    } catch (error) {
+        console.warn('Failed to load config from localStorage:', error);
+    }
+}
+
+/**
+ * Save config to localStorage
+ */
+function saveLocalConfig() {
+    try {
+        const cfg = config.getConfig();
+        localStorage.setItem('seedjoy-config', JSON.stringify(cfg));
+    } catch (error) {
+        console.warn('Failed to save config to localStorage:', error);
+    }
+}
+
+/**
+ * Show a notification message to the user
+ */
+function showNotification(title, message, type = 'info', duration = 5000) {
+    // Create notification element if it doesn't exist
+    let notificationContainer = document.getElementById('notification-container');
+    if (!notificationContainer) {
+        notificationContainer = document.createElement('div');
+        notificationContainer.id = 'notification-container';
+        notificationContainer.style.position = 'fixed';
+        notificationContainer.style.top = '20px';
+        notificationContainer.style.right = '20px';
+        notificationContainer.style.zIndex = '10000';
+        notificationContainer.style.maxWidth = '400px';
+        document.body.appendChild(notificationContainer);
+    }
+    
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.style.backgroundColor = type === 'info' ? '#2196F3' : type === 'success' ? '#4CAF50' : type === 'warning' ? '#FF9800' : '#F44336';
+    notification.style.color = 'white';
+    notification.style.padding = '16px';
+    notification.style.marginBottom = '10px';
+    notification.style.borderRadius = '8px';
+    notification.style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)';
+    notification.style.animation = 'slideIn 0.3s ease';
+    
+    notification.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+                <strong style="display: block; margin-bottom: 4px;">${title}</strong>
+                <div style="font-size: 14px; opacity: 0.9;">${message}</div>
+            </div>
+            <button onclick="this.parentElement.parentElement.remove()" style="background: transparent; border: none; color: white; font-size: 20px; cursor: pointer; padding: 0 0 0 10px;">×</button>
+        </div>
+    `;
+    
+    notificationContainer.appendChild(notification);
+    
+    // Auto-remove after duration
+    if (duration > 0) {
+        setTimeout(() => {
+            notification.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => notification.remove(), 300);
+        }, duration);
+    }
+}
+
+// Add CSS animations for notifications
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideIn {
+        from {
+            transform: translateX(400px);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(400px);
+            opacity: 0;
+        }
+    }
+`;
+document.head.appendChild(style);
+
+// Auto-save config to localStorage when changed
+setInterval(() => {
+    if (config) {
+        saveLocalConfig();
+    }
+}, 5000); // Save every 5 seconds

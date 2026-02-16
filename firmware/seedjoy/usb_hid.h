@@ -1,0 +1,60 @@
+/**
+ * SeedJoy - USB HID Controller
+ * 
+ * Implements USB HID gamepad/joystick interface
+ */
+
+#ifndef USB_HID_H
+#define USB_HID_H
+
+#include "config.h"
+#include <Adafruit_TinyUSB.h>
+
+class USBHIDController {
+public:
+  USBHIDController();
+  
+  // Initialize USB HID (call in setup)
+  bool begin(const DeviceConfig* config);
+  
+  // Send HID report with current axis and button states
+  void sendReport(const int16_t axes[MAX_AXES], uint16_t buttonBitmask);
+  
+  // Check if USB is connected and ready
+  bool isReady();
+  
+  // Process configuration requests from host
+  void processConfigCommands();
+  
+  // Set callback for config write requests
+  void setConfigWriteCallback(void (*callback)(const DeviceConfig*));
+  void setConfigReadCallback(DeviceConfig* (*callback)());
+  
+private:
+  Adafruit_USBD_HID usb_hid_;
+  
+  // HID Report Descriptor for 4-axis, 16-button gamepad
+  static const uint8_t HID_REPORT_DESCRIPTOR[];
+  static const uint16_t HID_REPORT_DESCRIPTOR_SIZE;
+  
+  // HID Report structure
+  struct __attribute__((packed)) HIDReport {
+    int16_t x;          // Axis 0
+    int16_t y;          // Axis 1
+    int16_t z;          // Axis 2
+    int16_t rz;         // Axis 3
+    uint16_t buttons;   // 16 buttons (bit 0-15)
+  };
+  
+  HIDReport report_;
+  
+  // Configuration callbacks
+  void (*configWriteCallback_)(const DeviceConfig*);
+  DeviceConfig* (*configReadCallback_)();
+  
+  // Process incoming data (for configuration)
+  static void hidReportCallback(uint8_t report_id, hid_report_type_t report_type,
+                                 uint8_t const* buffer, uint16_t bufsize);
+};
+
+#endif // USB_HID_H
