@@ -1,0 +1,34 @@
+# Arduino
+*.elf
+*.hex
+*.bin
+*.map
+build/
+.build/
+
+# PlatformIO
+.pio/
+.vscode/
+.clang_complete
+.gcc-flags.json
+
+# macOS
+.DS_Store
+._*
+
+# IDE
+*.swp
+*.swo
+*~
+.idea/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+
+# Node (if using web dev tools)
+node_modules/
+package-lock.json
