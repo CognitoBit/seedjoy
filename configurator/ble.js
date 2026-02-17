@@ -73,12 +73,19 @@ class SeedJoyBLE {
     }
 
     // Config service (custom)
+    console.log('Attempting to discover config service:', this.CONFIG_SERVICE_UUID);
     try {
       this.configService = await this.server.getPrimaryService(this.CONFIG_SERVICE_UUID);
+      console.log('✓ Config service discovered successfully');
 
       // Config characteristics (some may be missing on older firmware)
+      console.log('Discovering config characteristics...');
       this.configReadCharacteristic = await this.configService.getCharacteristic(this.CONFIG_READ_UUID).catch(() => null);
+      console.log('Read characteristic:', this.configReadCharacteristic ? '✓' : '✗');
+      
       this.configWriteCharacteristic = await this.configService.getCharacteristic(this.CONFIG_WRITE_UUID).catch(() => null);
+      console.log('Write characteristic:', this.configWriteCharacteristic ? '✓' : '✗');
+      
       this.statusCharacteristic = await this.configService.getCharacteristic(this.STATUS_UUID).catch(() => null);
       this.axesMonitorCharacteristic = await this.configService.getCharacteristic(this.AXES_MONITOR_UUID).catch(() => null);
       this.buttonsMonitorCharacteristic = await this.configService.getCharacteristic(this.BUTTONS_MONITOR_UUID).catch(() => null);
@@ -114,7 +121,10 @@ class SeedJoyBLE {
       }
 
     } catch (err) {
-      console.warn('Config service not available or incomplete:', err);
+      console.error('✗ Config service discovery failed!');
+      console.error('Error details:', err);
+      console.error('Error name:', err.name);
+      console.error('Error message:', err.message);
     }
 
     this.connected = true;

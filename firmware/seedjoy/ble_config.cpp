@@ -37,6 +37,8 @@ bool BLEConfigService::begin(DeviceConfig* config, StorageManager* storage, Axes
   
   Serial.print("BLE Config Service started with UUID: ");
   Serial.println(BLE_CONFIG_SERVICE_UUID);
+  Serial.print("Service started successfully: ");
+  Serial.println(service_.started() ? "YES" : "NO");
   
   // Configure Config Read characteristic (Read only, notify)
   configReadChar_.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
