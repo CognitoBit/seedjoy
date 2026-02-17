@@ -181,18 +181,21 @@ struct DeviceConfig {
     bleConnInterval = 2;  // 2 * 1.25ms = 2.5ms (try for low latency)
     bleTxPower = 0;       // 0 dBm
     
-    // Initialize default axes
+    // Initialize default axes (DISABLED by default to prevent floating pin noise)
+    // SAFETY: User must explicitly enable axes in configurator after connecting hardware
+    // Floating pins read electrical noise and cause random HID input!
     for (int i = 0; i < MAX_AXES; i++) {
-      axes[i].enabled = true;
+      axes[i].enabled = false;  // SAFETY: disabled until user enables in configurator
       if (i == 0) axes[i].pin = AXIS_0_PIN;
       else if (i == 1) axes[i].pin = AXIS_1_PIN;
       else if (i == 2) axes[i].pin = AXIS_2_PIN;
       else if (i == 3) axes[i].pin = AXIS_3_PIN;
     }
     
-    // Initialize default buttons
+    // Initialize default buttons (DISABLED by default to prevent floating pin noise)
+    // SAFETY: User must explicitly enable buttons in configurator after connecting hardware
     for (int i = 0; i < MAX_BUTTONS; i++) {
-      buttons[i].enabled = true;
+      buttons[i].enabled = false;  // SAFETY: disabled until user enables in configurator
       buttons[i].pin = DEFAULT_BUTTON_PINS[i];
       buttons[i].logicalNumber = i;
     }

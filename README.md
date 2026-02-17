@@ -28,7 +28,7 @@ A dual-mode (USB/BLE) game controller firmware for Seeed Studio XIAO nRF52840, i
 - A1 (P0.03) - Axis 2 (Y)
 - A2 (P0.28) - Axis 3 (Z)
 - A3 (P0.29) - Axis 4 (Rz)
-
+`¶++
 ### Buttons
 - D1 (P0.04) - Button 1
 - D2 (P0.05) - Button 2
@@ -108,24 +108,38 @@ Open the web configurator and connect to your device:
 
 1. Open configurator: `file:///path/to/configurator/index.html` (or serve locally with HTTPS)
 2. Click "Connect Device" to pair via WebBluetooth
-3. The device automatically enters **Configuration Mode** for 10 seconds:
+3. The device automatically enters **Configuration Mode** for 60 seconds:
    - HID input is disabled to prevent unwanted keystrokes/mouse movements
+   - **IMPORTANT**: All axes and buttons are **disabled by default** for safety
+   - This prevents floating pins from generating random input
    - Hold the MODE button to stay in configuration mode
    - Send `H` via serial to enable HID immediately
 4. **Read Configuration**: Click "Read from Device" to download current settings
-5. **Modify Settings**: 
-   - Calibrate axes with live preview
-   - Remap buttons
+5. **Enable Your Inputs**: 
+   - **Enable only the axes/buttons you have physically connected**
+   - Axes on unconnected pins will read electrical noise and cause chaos
+   - Example: If you only have a potentiometer on A0, enable only Axis 0
+6. **Calibrate and Configure**: 
+   - Calibrate enabled axes with live preview
+   - Remap buttons as needed
    - Adjust deadzones and curves
-6. **Write Configuration**: Click "Write to Device" to save settings to Flash
-7. Configuration is automatically saved and persists across reboots
+7. **Write Configuration**: Click "Write to Device" to save settings to Flash
+8. Configuration is automatically saved and persists across reboots
+
+**SAFETY WARNING**: 
+- ⚠️ Only enable axes/buttons that have physical hardware connected
+- Floating (unconnected) pins read random electrical noise
+- This causes random keyboard/mouse input that can crash your system
+- When in doubt, leave inputs disabled until you connect hardware
 
 **Features:**
 - ✅ Read/write configuration via BLE
 - ✅ Real-time axis monitoring with live graphs
+- ✅ Real-time button state monitoring
 - ✅ Remote calibration (min/center/max)
 - ✅ Battery level monitoring
 - ✅ Automatic configuration mode (prevents HID interference)
+- ✅ Safe defaults: all inputs disabled until explicitly enabled
 - ✅ Export/import configuration profiles (localStorage)
 
 ## Configuration
@@ -253,7 +267,14 @@ docs/
 - [ ] Advanced power management
 - [ ] OTA firmware updates via BLE DFU
 
-## Troubleshooting
+##Random keyboard/mouse input when connecting via Bluetooth**
+- This happens when axes/buttons are enabled but not physically connected
+- Floating pins read electrical noise and generate random HID input
+- **Solution**: In configurator, disable all unused axes and buttons
+- Only enable inputs that have actual hardware connected
+- Write the config to device to save the safe configuration
+
+** Troubleshooting
 
 **Device not recognized in USB mode**
 - Check USB cable (must support data, not charge-only)

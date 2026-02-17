@@ -43,7 +43,7 @@ OperationMode currentMode = MODE_USB;
 // Configuration mode for BLE (prevents HID reports during setup)
 bool configurationMode = false;
 uint32_t bleConnectionTime = 0;
-const uint32_t CONFIG_MODE_TIMEOUT = 10000; // 10 seconds after connection
+const uint32_t CONFIG_MODE_TIMEOUT = 60000; // 60 seconds after connection (was 10s - extended for safety)
 bool wasConnected = false;
 
 // Battery monitoring
@@ -287,6 +287,12 @@ void updateInputs() {
 }
 
 void sendHIDReports() {
+  // SAFETY: Don't send HID reports in configuration mode
+  // This prevents floating pins from generating random input during initial setup
+  if (configurationMode && currentMode == MODE_BLE) {
+    return;
+  }
+  
   // Gather axis values
   int16_t axisValues[MAX_AXES];
   for (int i = 0; i < MAX_AXES; i++) {
@@ -360,8 +366,13 @@ void handleBLEConfigMode() {
     bleHID.setHIDEnabled(false);
     Serial.println("=======================================");
     Serial.println("BLE CONNECTED - Configuration Mode Active");
-    Serial.println("HID reports disabled for 10 seconds");
-    Serial.println("Hold MODE button or send 'C' via serial to stay in config mode");
+    Serial.println("HID reports disabled for 60 seconds");
+    Serial.println("");
+    Serial.println("** SAFETY MODE: All inputs disabled! **");
+    Serial.println("Enable only connected axes/buttons in");
+    Serial.println("the configurator to prevent noise.");
+    Serial.println("");
+    Serial.println("Hold MODE button or send 'C' to stay in config mode");
     Serial.println("Send 'H' to enable HID mode immediately");
     Serial.println("=======================================");
   }
