@@ -26,24 +26,28 @@ BLEConfigService::BLEConfigService()
   memset(&axisData_, 0, sizeof(axisData_));
   memset(&buttonsData_, 0, sizeof(buttonsData_));
 }
+}
 
 bool BLEConfigService::begin(DeviceConfig* config, StorageManager* storage, AxesProcessor* axes) {
   config_ = config;
   storage_ = storage;
   axes_ = axes;
   
-  // Configure and add service
+  // Start the service FIRST
   service_.begin();
-  
   Serial.print("BLE Config Service started with UUID: ");
   Serial.println(BLE_CONFIG_SERVICE_UUID);
+  
+  Serial.println("Configuring BLE Config Service characteristics...");
   
   // Configure Config Read characteristic (Read only, notify)
   configReadChar_.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
   configReadChar_.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
   configReadChar_.setMaxLen(MAX_CONFIG_SIZE);
   configReadChar_.setFixedLen(false);
-  configReadChar_.begin();
+  uint16_t err1 = configReadChar_.begin();
+  Serial.print("Config Read Char initialized: ");
+  Serial.println(err1 == ERROR_NONE ? "SUCCESS" : "FAILED");
   
   // Configure Config Write characteristic (Write only)
   configWriteChar_.setProperties(CHR_PROPS_WRITE | CHR_PROPS_WRITE_WO_RESP);
@@ -51,7 +55,9 @@ bool BLEConfigService::begin(DeviceConfig* config, StorageManager* storage, Axes
   configWriteChar_.setMaxLen(MAX_CONFIG_SIZE);
   configWriteChar_.setFixedLen(false);
   configWriteChar_.setWriteCallback(configWriteCallback);
-  configWriteChar_.begin();
+  uint16_t err2 = configWriteChar_.begin();
+  Serial.print("Config Write Char initialized: ");
+  Serial.println(err2 == ERROR_NONE ? "SUCCESS" : "FAILED");
   
   // Configure Status characteristic (Read, notify)
   statusChar_.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);

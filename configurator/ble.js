@@ -164,9 +164,10 @@ class SeedJoyBLE {
 
   // Parse buttons notification: uint16 bitmask, uint32 timestamp
   parseButtonsData(dataView) {
-    const dv = new DataView(dataView.buffer);
-    const bitmask = dv.getUint16(0, true);
-    const timestamp = dv.getUint32(2, true);
+    // Use the dataView directly instead of creating a new one from buffer
+    // (buffer might have offset that we'd lose)
+    const bitmask = dataView.getUint16(0, true);
+    const timestamp = dataView.getUint32(2, true);
     return { bitmask, timestamp };
   }
 
