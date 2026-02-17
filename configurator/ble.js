@@ -163,13 +163,18 @@ class SeedJoyBLE {
 
   // Parse axis notification (packed little-endian): int16[4], uint16[4], uint32
   parseAxisData(dataView) {
-    const dv = new DataView(dataView.buffer);
+    // Validate size (should be 20 bytes: 4*int16 + 4*uint16 + uint32)
+    if (dataView.byteLength < 20) {
+      console.warn('Axis data too small:', dataView.byteLength, 'bytes (expected 20)');
+      return { processed: [0,0,0,0], raw: [0,0,0,0], timestamp: 0 };
+    }
+    // Use dataView directly to preserve buffer offset
     let off = 0;
     const processed = [];
-    for (let i = 0; i < 4; i++) { processed.push(dv.getInt16(off, true)); off += 2; }
+    for (let i = 0; i < 4; i++) { processed.push(dataView.getInt16(off, true)); off += 2; }
     const raw = [];
-    for (let i = 0; i < 4; i++) { raw.push(dv.getUint16(off, true)); off += 2; }
-    const timestamp = dv.getUint32(off, true);
+    for (let i = 0; i < 4; i++) { raw.push(dataView.getUint16(off, true)); off += 2; }
+    const timestamp = dataView.getUint32(off, true);
     return { processed, raw, timestamp };
   }
 
