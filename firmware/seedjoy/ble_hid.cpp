@@ -89,8 +89,9 @@ bool BLEHIDController::begin(const DeviceConfig* config) {
   
   Bluefruit.Periph.setConnInterval(minInterval, maxInterval);
   
-  // Start advertising
-  startAdvertising();
+  // NOTE: Do NOT start advertising here!
+  // Advertising will be started manually after all services are initialized
+  // (including the BLE config service in seedjoy.ino)
   
   return true;
 }

@@ -129,7 +129,7 @@ void setup() {
     if (bleHID.begin(&deviceConfig)) {
       Serial.println("BLE HID initialized successfully");
       
-      // Initialize BLE config service
+      // Initialize BLE config service BEFORE starting advertising
       Serial.println("Starting BLE Config Service...");
       if (bleConfig.begin(&deviceConfig, &storage, &axes)) {
         Serial.println("BLE Config Service initialized successfully");
@@ -139,6 +139,9 @@ void setup() {
         Serial.println("BLE Config Service initialization failed!");
       }
       
+      // NOW start advertising (after all services are initialized)
+      Serial.println("Starting BLE advertising...");
+      bleHID.startAdvertising();
       Serial.println("Waiting for connection...");
       digitalWrite(STATUS_LED_PIN, LOW);   // Turn off status LED
       // Connection LED will be controlled by BLE connection status
