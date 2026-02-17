@@ -50,6 +50,11 @@ bool BLEHIDController::begin(const DeviceConfig* config) {
     return false;
   }
   
+  // Disable BLE security/bonding to prevent reconnection issues
+  // HID devices shouldn't require pairing - it causes OS pairing cache problems
+  Bluefruit.Security.setIOCaps(false, false, false);
+  Bluefruit.clearBonds();
+  
   // Set device name
   Bluefruit.setName(config->deviceName);
   
