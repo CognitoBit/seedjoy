@@ -103,7 +103,7 @@ bool BLEHIDController::begin(const DeviceConfig* config) {
 void BLEHIDController::startAdvertising(BLEService* configService) {
   Serial.println("=== BLE Advertising Setup ===");
   
-  // Advertising packet (31 bytes max - keep essential info)
+  // Advertising packet (31 bytes max)
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
   Bluefruit.Advertising.addTxPower();
   Bluefruit.Advertising.addAppearance(BLE_APPEARANCE_HID_JOYSTICK);
@@ -112,20 +112,17 @@ void BLEHIDController::startAdvertising(BLEService* configService) {
   Bluefruit.Advertising.addService(blehid_);
   Serial.println("Added HID service to advertising");
   
-  // Include name
-  Bluefruit.Advertising.addName();
-  
-  // Scan response packet (31 bytes max - additional services)
-  Bluefruit.ScanResponse.addName();
-  
-  // Include config service in scan response (required for WebBluetooth discovery)
-  // Must be in advertising or scan response for getPrimaryService() to work
+  // Include config service in MAIN advertising packet (critical for WebBluetooth)
+  // WebBluetooth may not discover services only in scan response
   if (configService) {
-    Bluefruit.ScanResponse.addService(*configService);
-    Serial.println("Added Config service to scan response");
+    Bluefruit.Advertising.addService(*configService);
+    Serial.println("Added Config service to advertising packet");
   } else {
     Serial.println("WARNING: Config service is NULL!");
   }
+  
+  // Scan response packet - put name here to save space in main packet
+  Bluefruit.ScanResponse.addName();
   
   Serial.println("=== Starting BLE Advertising ===");
   
