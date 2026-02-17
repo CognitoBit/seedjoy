@@ -61,8 +61,24 @@
                 <div class="pinout-diagram">
                     <h3>XIAO nRF52840 Pinout</h3>
                     <div id="pinout-svg">
-                        <!--todo- SVG pinout diagram will be inserted here -->
-                        <p style="text-align: center; color: #888;">Pin diagram loading...</p>
+                        <div style="padding: 15px; background: #2a2a2a; border-radius: 8px; font-family: monospace; font-size: 13px;">
+                            <div style="margin-bottom: 10px;"><strong>📊 Axes (Analog):</strong></div>
+                            <div style="margin-left: 10px; margin-bottom: 15px;">
+                                A0/D0 (P0.02) • A1/D1 (P0.03)<br>
+                                A2/D2 (P0.28) • A3/D3 (P0.29)
+                            </div>
+                            <div style="margin-bottom: 10px;"><strong>🔘 Shift Registers (74HC165):</strong></div>
+                            <div style="margin-left: 10px; margin-bottom: 15px;">
+                                D6/TX (P1.11) - Data (Q7)<br>
+                                D7/RX (P1.12) - Clock<br>
+                                D8/SCK (P1.13) - Load
+                            </div>
+                            <div style="margin-bottom: 10px;"><strong>⚙️ Other:</strong></div>
+                            <div style="margin-left: 10px;">
+                                D9/MISO (P1.14) - Mode Select<br>
+                                D4-D5, D10 - Optional Direct Buttons
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="pin-assignment">
@@ -283,7 +299,10 @@
                     <label>
                         <input type="checkbox" id="shift-reg-inverted"> Invert Logic
                     </label>
-                    <p class="hint">Shift register buttons start at button 16+</p>
+                    <p class="hint">
+                        📌 Default pins: D6 (data), D7 (clock), D8 (load)<br>
+                        Shift register buttons start at button 16+ (direct buttons 0-15)
+                    </p>
                 </div>
 
                 <div class="settings-group">

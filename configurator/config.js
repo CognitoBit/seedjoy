@@ -46,9 +46,9 @@ class SeedJoyConfig {
             shiftRegisters: {
                 enabled: false,
                 numChips: 1,
-                dataPin: 0xFF,
-                clockPin: 0xFF,
-                loadPin: 0xFF,
+                dataPin: 0x2B,   // D6 / P1.11 (TX) - default data pin
+                clockPin: 0x2C,  // D7 / P1.12 (RX) - default clock pin
+                loadPin: 0x2D,   // D8 / P1.13 (SCK) - default load pin
                 inverted: false
             },
             
@@ -81,25 +81,16 @@ class SeedJoyConfig {
     
     /**
      * Get default button configurations
+     * Note: Most buttons disabled - primary use case is shift registers
      */
     getDefaultButtons() {
         const buttonPins = [
-            0x04,  // D1 / P0.04
-            0x05,  // D2 / P0.05
-            0x06,  // D3 / P0.06
-            0x07,  // D4 / P0.07
-            0x08,  // D5 / P0.08
-            0x09,  // D6 / P0.09
-            0x0A,  // D7 / P0.10
-            0x0B,  // D8 / P0.11
-            0x0C,  // D9 / P0.12
-            0x0D,  // D10 / P0.13
-            0x1A,  // MOSI / P0.26
-            0x1B,  // MISO / P0.27
-            0x1E,  // SCK / P0.30
-            0x1F,  // TX / P0.31
-            0x00,  // RX / P0.00
-            0x01   // SCL / P0.01
+            0x04,  // D4 / P0.04 (SDA)
+            0x05,  // D5 / P0.05 (SCL)
+            0x2F,  // D10 / P1.15 (MOSI)
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF,  // Unused (reserved for shift registers)
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF
         ];
         
         return buttonPins.map((pin, index) => ({
@@ -283,27 +274,20 @@ class SeedJoyConfig {
      * Get all available pins
      */
     static getAvailablePins() {
+        // Based on official XIAO nRF52840 pinout
+        // Reference: https://wiki.seeedstudio.com/XIAO_BLE/
         return [
-            { value: 0x02, label: 'A0 (P0.02)' },
-            { value: 0x03, label: 'A1 (P0.03)' },
-            { value: 0x28, label: 'A2 (P0.28)' },
-            { value: 0x29, label: 'A3 (P0.29)' },
-            { value: 0x04, label: 'D1 (P0.04)' },
-            { value: 0x05, label: 'D2 (P0.05)' },
-            { value: 0x06, label: 'D3 (P0.06)' },
-            { value: 0x07, label: 'D4 (P0.07)' },
-            { value: 0x08, label: 'D5 (P0.08)' },
-            { value: 0x09, label: 'D6 (P0.09)' },
-            { value: 0x0A, label: 'D7 (P0.10)' },
-            { value: 0x0B, label: 'D8 (P0.11)' },
-            { value: 0x0C, label: 'D9 (P0.12)' },
-            { value: 0x0D, label: 'D10 (P0.13)' },
-            { value: 0x1A, label: 'MOSI (P0.26)' },
-            { value: 0x1B, label: 'MISO (P0.27)' },
-            { value: 0x1E, label: 'SCK (P0.30)' },
-            { value: 0x1F, label: 'TX (P0.31)' },
-            { value: 0x00, label: 'RX (P0.00)' },
-            { value: 0x01, label: 'SCL (P0.01)' },
+            { value: 0x02, label: 'A0/D0 (P0.02)' },
+            { value: 0x03, label: 'A1/D1 (P0.03)' },
+            { value: 0x28, label: 'A2/D2 (P0.28)' },
+            { value: 0x29, label: 'A3/D3 (P0.29)' },
+            { value: 0x04, label: 'D4/SDA (P0.04)' },
+            { value: 0x05, label: 'D5/SCL (P0.05)' },
+            { value: 0x2B, label: 'D6/TX (P1.11)' },
+            { value: 0x2C, label: 'D7/RX (P1.12)' },
+            { value: 0x2D, label: 'D8/SCK (P1.13)' },
+            { value: 0x2E, label: 'D9/MISO (P1.14)' },
+            { value: 0x2F, label: 'D10/MOSI (P1.15)' },
             { value: 0xFF, label: 'Not Used' }
         ];
     }
