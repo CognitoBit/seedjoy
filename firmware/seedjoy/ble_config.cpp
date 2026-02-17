@@ -32,12 +32,10 @@ bool BLEConfigService::begin(DeviceConfig* config, StorageManager* storage, Axes
   storage_ = storage;
   axes_ = axes;
   
-  // Start the service FIRST
-  service_.begin();
-  Serial.print("BLE Config Service started with UUID: ");
-  Serial.println(BLE_CONFIG_SERVICE_UUID);
-  
   Serial.println("Configuring BLE Config Service characteristics...");
+  
+  // Configure ALL characteristics BEFORE starting the service
+  // (Bluefruit requires characteristics to be added before service.begin())
   
   // Configure Config Read characteristic (Read only, notify)
   configReadChar_.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
@@ -86,6 +84,11 @@ bool BLEConfigService::begin(DeviceConfig* config, StorageManager* storage, Axes
   calibrateChar_.setFixedLen(false);
   calibrateChar_.setWriteCallback(calibrateCallback);
   calibrateChar_.begin();
+  
+  // NOW start the service (adds all characteristics to the service)
+  service_.begin();
+  Serial.print("BLE Config Service started with UUID: ");
+  Serial.println(BLE_CONFIG_SERVICE_UUID);
   
   // Serialize initial config
   serializeConfig();
