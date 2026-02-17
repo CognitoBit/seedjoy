@@ -425,41 +425,120 @@ void handleBLEConfigMode() {
 }
 
 void handleSerialCommand() {
-  char cmd = Serial.read();
+  // Read available characters into a buffer
+  static String commandBuffer = "";
   
-  switch (cmd) {
-    case 'C':
-    case 'c':
-      // Enter configuration mode
-      if (currentMode == MODE_BLE) {
-        configurationMode = true;
-        bleHID.setHIDEnabled(false);
-        bleConnectionTime = millis(); // Reset timer
-        Serial.println("Configuration mode enabled (HID disabled)");
-      } else {
-        Serial.println("Configuration mode only available in BLE mode");
+  while (Serial.available()) {
+    char c = Serial.read();
+    
+    // Line-based command (ends with newline)
+    if (c == '\n' || c == '\r') {
+      if (commandBuffer.length() > 0) {
+        processCommand(commandBuffer);
+        commandBuffer = "";
       }
-      break;
+      return;
+    }
+    
+    commandBuffer += c;
+    
+    // Single-char commands (backwards compatibility)
+    if (commandBuffer.length() == 1) {
+      char cmd = commandBuffer[0];
       
-    case 'H':
-    case 'h':
-      // Enable HID mode
-      if (currentMode == MODE_BLE) {
-        configurationMode = false;
-        bleHID.setHIDEnabled(true);
-        Serial.println("HID mode enabled");
-      } else {
-        Serial.println("Already in USB HID mode");
+      if (cmd == 'C' || cmd == 'c' || cmd == 'H' || cmd == 'h' || cmd == '?') {
+        processCommand(commandBuffer);
+        commandBuffer = "";
+        return;
       }
-      break;
-      
-    case '?':
-      // Print help
-      Serial.println("\n=== SeedJoy Commands ===");
-      Serial.println("C - Enter configuration mode (disable HID)");
-      Serial.println("H - Enable HID mode");
-      Serial.println("? - Show this help");
-      Serial.println("=======================\n");
-      break;
+    }
   }
+}
+
+void processCommand(String cmd) {
+  cmd.trim();
+  
+  // Single character commands
+  if (cmd.length() == 1) {
+    char c = cmd[0];
+    
+    switch (c) {
+      case 'C':
+      case 'c':
+        // Enter configuration mode
+        if (currentMode == MODE_BLE) {
+          configurationMode = true;
+          bleHID.setHIDEnabled(false);
+          bleConnectionTime = millis(); // Reset timer
+          Serial.println("Configuration mode enabled (HID disabled)");
+        } else {
+          Serial.println("Configuration mode only available in BLE mode");
+        }
+        break;
+        
+      case 'H':
+      case 'h':
+        // Enable HID mode
+        if (currentMode == MODE_BLE) {
+          configurationMode = false;
+          bleHID.setHIDEnabled(true);
+          Serial.println("HID mode enabled");
+        } else {
+          Serial.println("Already in USB HID mode");
+        }
+        break;
+        
+      case '?':
+        // Print help
+        Serial.println("\n=== SeedJoy Commands ===");
+        Serial.println("C - Enter configuration mode (disable HID)");
+        Serial.println("H - Enable HID mode");
+        Serial.println("read_config - Send config as JSON");
+        Serial.println("write_config:{JSON} - Write config from JSON");
+        Serial.println("ping - Test connection");
+        Serial.println("? - Show this help");
+        Serial.println("=======================\n");
+        break;
+    }
+    return;
+  }
+  
+  // Multi-character commands
+  if (cmd.startsWith("read_config")) {
+    sendConfigAsJSON();
+  }
+  else if (cmd.startsWith("write_config:")) {
+    String jsonData = cmd.substring(13); // Skip "write_config:"
+    receiveConfigFromJSON(jsonData);
+  }
+  else if (cmd == "ping") {
+    Serial.println("{\"type\":\"pong\"}");
+  }
+  else {
+    Serial.print("Unknown command: ");
+    Serial.println(cmd);
+  }
+}
+
+void sendConfigAsJSON() {
+  // Note: This is a simplified version - full JSON serialization would use ArduinoJson
+  Serial.print("{\"type\":\"config\",\"data\":{");
+  Serial.print("\"deviceName\":\"");
+  Serial.print(deviceConfig.deviceName);
+  Serial.print("\",\"mode\":");
+  Serial.print(deviceConfig.mode);
+  Serial.print(",\"usbPollRate\":");
+  Serial.print(deviceConfig.usbPollRate);
+  Serial.print(",\"bleConnInterval\":");
+  Serial.print(deviceConfig.bleConnInterval);
+  Serial.print(",\"bleTxPower\":");
+  Serial.print(deviceConfig.bleTxPower);
+  // Add more fields as needed...
+  Serial.println("}}");
+}
+
+void receiveConfigFromJSON(String jsonData) {
+  // Note: This is a placeholder - full implementation would parse JSON
+  // For now, just acknowledge receipt
+  Serial.println("{\"type\":\"status\",\"message\":\"Config write not yet implemented\",\"success\":false}");
 }

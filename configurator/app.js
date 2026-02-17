@@ -5,6 +5,9 @@
  */
 
 let ble = null;
+let serial = null;
+let activeConnection = null;
+let connectionMode = 'bluetooth'; // 'bluetooth' or 'serial'
 let config = null;
 let calibration = null;
 
@@ -14,16 +17,22 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize modules
     ble = new SeedJoyBLE();
+    serial = new SeedJoySerial();
     config = new SeedJoyConfig();
-    calibration = new CalibrationManager(ble, config);
     
-    // Set up connection callbacks
-    ble.onConnectionChange = handleConnectionChange;
-    ble.onBatteryChange = handleBatteryChange;
-    ble.onButtonData = handleButtonData; // live button updates
+    // Set active connection based on mode
+    activeConnection = ble;
+    
+    // Create calibration manager (will use activeConnection)
+    calibration = new CalibrationManager(activeConnection, config);
+    
+    // Set up connection callbacks for both connection types
+    setupConnectionCallbacks(ble);
+    setupConnectionCallbacks(serial);
     
     // Initialize UI
     initializeUI();
+    initializeConnectionMode();
     initializeTabs();
     initializePinConfiguration();
     initializeAxisCalibration();
@@ -36,6 +45,55 @@ document.addEventListener('DOMContentLoaded', () => {
     
     console.log('SeedJoy Configurator ready!');
 });
+
+/**
+ * Set up connection callbacks for a connection object
+ */
+function setupConnectionCallbacks(conn) {
+    conn.onConnectionChange = handleConnectionChange;
+    conn.onBatteryChange = handleBatteryChange;
+    conn.onButtonData = handleButtonData;
+}
+
+/**
+ * Initialize connection mode switcher
+ */
+function initializeConnectionMode() {
+    const modeBtns = document.querySelectorAll('.mode-btn');
+    const modeHint = document.getElementById('mode-hint');
+    
+    modeBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mode = btn.getAttribute('data-mode');
+            
+            // Don't switch if already connected
+            if (activeConnection && activeConnection.connected) {
+                alert('Please disconnect before switching connection mode');
+                return;
+            }
+            
+            // Update mode
+            connectionMode = mode;
+            
+            // Update UI
+            modeBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            // Update active connection
+            if (mode === 'bluetooth') {
+                activeConnection = ble;
+                calibration.ble = ble;
+                modeHint.textContent = 'WebBluetooth - wireless connection (Chrome/Edge only)';
+            } else {
+                activeConnection = serial;
+                calibration.ble = serial;
+                modeHint.textContent = 'WebSerial - USB connection (Chrome/Edge 89+)';
+            }
+            
+            console.log('Connection mode:', mode);
+        });
+    });
+}
 
 /**
  * Initialize UI components
@@ -404,20 +462,21 @@ function initializeActionButtons() {
     // Connect/Disconnect
     document.getElementById('connect-btn').addEventListener('click', async () => {
         try {
-            await ble.connect();
+            await activeConnection.connect();
         } catch (error) {
             alert('Failed to connect: ' + error.message);
         }
     });
     
     document.getElementById('disconnect-btn').addEventListener('click', async () => {
-        await ble.disconnect();
+        await activeConnection.disconnect();
     });
     
     // Read/Write config
     document.getElementById('read-config-btn').addEventListener('click', async () => {
         try {
-            if (!ble.configReadCharacteristic) {
+            // Check if config is available (different for BLE vs Serial)
+            if (connectionMode === 'bluetooth' && !ble.configReadCharacteristic) {
                 alert('Configuration service not available.\n\n' +
                       'Please make sure you have uploaded the latest firmware with BLE config service support.');
                 return;
@@ -425,7 +484,7 @@ function initializeActionButtons() {
             
             showNotification('Reading Configuration', 'Downloading config from device...', 'info', 0);
             
-            const deviceConfig = await ble.readConfig();
+            const deviceConfig = await activeConnection.readConfig();
             config.config = deviceConfig;
             updateUIFromConfig();
             
@@ -437,7 +496,8 @@ function initializeActionButtons() {
     });
     
     document.getElementById('write-config-btn').addEventListener('click', async () => {
-        if (!ble.configWriteCharacteristic) {
+        // Check if config is available (different for BLE vs Serial)
+        if (connectionMode === 'bluetooth' && !ble.configWriteCharacteristic) {
             alert('Configuration service not available.\n\n' +
                   'Please make sure you have uploaded the latest firmware with BLE config service support.');
             return;
@@ -447,7 +507,7 @@ function initializeActionButtons() {
             try {
                 showNotification('Writing Configuration', 'Uploading config to device...', 'info', 0);
                 
-                await ble.writeConfig(config.getConfig());
+                await activeConnection.writeConfig(config.getConfig());
                 
                 showNotification('Success', 'Configuration written to device and saved to Flash', 'success', 3000);
             } catch (error) {

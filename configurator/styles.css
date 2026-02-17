@@ -84,6 +84,54 @@ header p {
     gap: 15px;
 }
 
+/* Connection Mode Selector */
+.connection-mode {
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.connection-mode label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: var(--text-color);
+}
+
+.mode-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 8px;
+}
+
+.mode-btn {
+    padding: 10px 20px;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.mode-btn:hover {
+    border-color: var(--secondary-color);
+    background: #f0f8ff;
+}
+
+.mode-btn.active {
+    border-color: var(--secondary-color);
+    background: var(--secondary-color);
+    color: white;
+}
+
+.mode-hint {
+    font-size: 0.85rem;
+    color: #666;
+    font-style: italic;
+}
+
 .connection-status {
     display: flex;
     align-items: center;

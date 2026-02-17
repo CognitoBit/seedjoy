@@ -17,6 +17,21 @@
         <!-- Connection Panel -->
         <section class="panel connection-panel">
             <h2>Device Connection</h2>
+            
+            <!-- Connection Mode Selector -->
+            <div class="connection-mode">
+                <label>Connection Mode:</label>
+                <div class="mode-buttons">
+                    <button id="mode-bluetooth" class="mode-btn active" data-mode="bluetooth">
+                        📡 Bluetooth
+                    </button>
+                    <button id="mode-serial" class="mode-btn" data-mode="serial">
+                        🔌 USB Serial
+                    </button>
+                </div>
+                <p class="mode-hint" id="mode-hint">WebBluetooth - wireless connection (Chrome/Edge only)</p>
+            </div>
+            
             <div class="connection-status">
                 <div id="status-indicator" class="status-indicator disconnected"></div>
                 <span id="status-text">Not Connected</span>
@@ -303,6 +318,7 @@
 
     <!-- Scripts -->
     <script src="ble.js"></script>
+    <script src="serial.js"></script>
     <script src="config.js"></script>
     <script src="calibration.js"></script>
     <script src="app.js"></script>
