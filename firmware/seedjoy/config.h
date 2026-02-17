@@ -24,34 +24,33 @@
 #define MAX_CURVE_POINTS 5
 
 // Pin definitions for XIAO nRF52840
-#define MODE_SELECT_PIN D0  // Hold HIGH for USB, LOW for BLE on boot
-#define STATUS_LED_PIN LED_RED
-#define CONNECTION_LED_PIN LED_BLUE
+// Reference: https://wiki.seeedstudio.com/XIAO_BLE/
 
-// Default axis pins
-#define AXIS_0_PIN A0  // P0.02
-#define AXIS_1_PIN A1  // P0.03
-#define AXIS_2_PIN A2  // P0.28
-#define AXIS_3_PIN A3  // P0.29
+// Mode select button (moved from D0 to avoid conflict with A0)
+#define MODE_SELECT_PIN D9  // P1.14 (MISO) - Hold LOW for BLE, HIGH for USB on boot
+#define STATUS_LED_PIN LED_RED    // P0.26 (red LED)
+#define CONNECTION_LED_PIN LED_BLUE  // P0.06 (blue LED)
 
-// Default button pins
+// Analog axes (4 axes on dedicated ADC pins)
+#define AXIS_0_PIN A0  // D0 = P0.02 (ADC1)
+#define AXIS_1_PIN A1  // D1 = P0.03 (ADC2)
+#define AXIS_2_PIN A2  // D2 = P0.28 (ADC5)
+#define AXIS_3_PIN A3  // D3 = P0.29 (ADC6)
+
+// Default shift register pins (74HC165 parallel-in, serial-out)
+#define SR_DATA_PIN  D6   // P1.11 (TX) - Serial data out (Q7)
+#define SR_CLOCK_PIN D7   // P1.12 (RX) - Shift clock
+#define SR_LOAD_PIN  D8   // P1.13 (SCK) - Parallel load (active LOW)
+
+// Legacy direct button pins (optional - primarily using shift registers)
+// Only 3 pins allocated, rest disabled (0xFF)
 const uint8_t DEFAULT_BUTTON_PINS[MAX_BUTTONS] = {
-  D1,   // P0.04
-  D2,   // P0.05
-  D3,   // P0.06
-  D4,   // P0.07
-  D5,   // P0.08
-  D6,   // P0.09
-  D7,   // P0.10
-  D8,   // P0.11
-  D9,   // P0.12
-  D10,  // P0.13
-  MOSI, // P0.26
-  MISO, // P0.27
-  SCK,  // P0.30
-  31,   // TX / P0.31
-  0,    // RX / P0.00
-  SCL   // P0.01
+  D4,   // P0.04 (SDA/A4)
+  D5,   // P0.05 (SCL/A5)
+  D10,  // P1.15 (MOSI)
+  0xFF, 0xFF, 0xFF, 0xFF, 0xFF,  // Unused
+  0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+  0xFF, 0xFF, 0xFF
 };
 
 // Operation modes
@@ -116,10 +115,10 @@ struct ShiftRegisterConfig {
   uint8_t loadPin;          // Latch/Load pin (SH/LD)
   bool inverted;            // Invert button logic
   
-  // Defaults
+  // Defaults (using predefined SR_ pins)
   ShiftRegisterConfig() :
     enabled(false), numChips(1),
-    dataPin(0xFF), clockPin(0xFF), loadPin(0xFF),
+    dataPin(D6), clockPin(D7), loadPin(D8),
     inverted(false) {}
 };
 

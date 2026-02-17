@@ -18,7 +18,7 @@
  */
 
 // Development flags
-#define DEV_FORCE_BLE_MODE 1  // Set to 1 to force BLE mode, 0 for normal operation
+#define DEV_FORCE_BLE_MODE 0 // Set to 1 to force BLE mode, 0 for normal operation
 
 #include "config.h"
 #include "storage.h"
