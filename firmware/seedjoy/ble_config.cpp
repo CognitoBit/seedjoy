@@ -26,7 +26,6 @@ BLEConfigService::BLEConfigService()
   memset(&axisData_, 0, sizeof(axisData_));
   memset(&buttonsData_, 0, sizeof(buttonsData_));
 }
-}
 
 bool BLEConfigService::begin(DeviceConfig* config, StorageManager* storage, AxesProcessor* axes) {
   config_ = config;
