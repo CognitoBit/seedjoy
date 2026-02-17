@@ -80,11 +80,22 @@ class SeedJoyBLE {
 
       // Config characteristics (some may be missing on older firmware)
       console.log('Discovering config characteristics...');
-      this.configReadCharacteristic = await this.configService.getCharacteristic(this.CONFIG_READ_UUID).catch(() => null);
-      console.log('Read characteristic:', this.configReadCharacteristic ? '✓' : '✗');
       
-      this.configWriteCharacteristic = await this.configService.getCharacteristic(this.CONFIG_WRITE_UUID).catch(() => null);
-      console.log('Write characteristic:', this.configWriteCharacteristic ? '✓' : '✗');
+      try {
+        this.configReadCharacteristic = await this.configService.getCharacteristic(this.CONFIG_READ_UUID);
+        console.log('Read characteristic: ✓');
+      } catch (err) {
+        console.log('Read characteristic: ✗', err.message);
+        this.configReadCharacteristic = null;
+      }
+      
+      try {
+        this.configWriteCharacteristic = await this.configService.getCharacteristic(this.CONFIG_WRITE_UUID);
+        console.log('Write characteristic: ✓');
+      } catch (err) {
+        console.log('Write characteristic: ✗', err.message);
+        this.configWriteCharacteristic = null;
+      }
       
       this.statusCharacteristic = await this.configService.getCharacteristic(this.STATUS_UUID).catch(() => null);
       this.axesMonitorCharacteristic = await this.configService.getCharacteristic(this.AXES_MONITOR_UUID).catch(() => null);
@@ -164,6 +175,11 @@ class SeedJoyBLE {
 
   // Parse buttons notification: uint16 bitmask, uint32 timestamp
   parseButtonsData(dataView) {
+    // Validate size (should be 6 bytes: uint16 + uint32)
+    if (dataView.byteLength < 6) {
+      console.warn('Button data too small:', dataView.byteLength, 'bytes (expected 6)');
+      return { bitmask: 0, timestamp: 0 };
+    }
     // Use the dataView directly instead of creating a new one from buffer
     // (buffer might have offset that we'd lose)
     const bitmask = dataView.getUint16(0, true);
