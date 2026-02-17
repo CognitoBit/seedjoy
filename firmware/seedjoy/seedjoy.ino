@@ -125,11 +125,15 @@ void setup() {
       blinkStatus(5); // Blink 5 times to indicate error
     }
   } else if (currentMode == MODE_BLE) {
-    Serial.println("Starting BLE HID...");
+    Serial.println("========================================");
+    Serial.println("       INITIALIZING BLE MODE");
+    Serial.println("========================================");
+    
     if (bleHID.begin(&deviceConfig)) {
       Serial.println("BLE HID initialized successfully");
       
       // Initialize BLE config service BEFORE starting advertising
+      Serial.println("");
       Serial.println("Starting BLE Config Service...");
       if (bleConfig.begin(&deviceConfig, &storage, &axes)) {
         Serial.println("BLE Config Service initialized successfully");
@@ -141,9 +145,12 @@ void setup() {
       
       // NOW start advertising (after all services are initialized)
       // Pass config service so it's included in advertising packet for WebBluetooth discovery
+      Serial.println("");
       Serial.println("Starting BLE advertising...");
       bleHID.startAdvertising(&bleConfig.getService());
       Serial.println("Waiting for connection...");
+      Serial.println("========================================");
+      Serial.println("");
       digitalWrite(STATUS_LED_PIN, LOW);   // Turn off status LED
       // Connection LED will be controlled by BLE connection status
     } else {
@@ -153,6 +160,8 @@ void setup() {
   }
   
   Serial.println("Setup complete!");
+  Serial.println("========================================");
+  Serial.println("");
   Serial.println("=================================");
 }
 
@@ -400,7 +409,12 @@ void handleBLEConfigMode() {
     if (modeButtonHeld) {
       // Reset timer while button is held
       bleConnectionTime = millis();
-      Serial.println("Mode button held - staying in config mode");
+      // Only log once per second to avoid flooding
+      static uint32_t lastButtonLog = 0;
+      if (millis() - lastButtonLog > 1000) {
+        Serial.println("Mode button held - staying in config mode");
+        lastButtonLog = millis();
+      }
     } else if (elapsedTime >= CONFIG_MODE_TIMEOUT) {
       // Timeout reached, enable HID
       configurationMode = false;
