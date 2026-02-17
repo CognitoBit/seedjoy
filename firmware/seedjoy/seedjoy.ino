@@ -140,8 +140,9 @@ void setup() {
       }
       
       // NOW start advertising (after all services are initialized)
+      // Pass config service so it's included in advertising packet for WebBluetooth discovery
       Serial.println("Starting BLE advertising...");
-      bleHID.startAdvertising();
+      bleHID.startAdvertising(&bleConfig.getService());
       Serial.println("Waiting for connection...");
       digitalWrite(STATUS_LED_PIN, LOW);   // Turn off status LED
       // Connection LED will be controlled by BLE connection status

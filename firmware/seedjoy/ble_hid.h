@@ -17,8 +17,8 @@ public:
   // Initialize BLE HID (call in setup)
   bool begin(const DeviceConfig* config);
   
-  // Start advertising
-  void startAdvertising();
+  // Start advertising (pass config service to include in advertising packet)
+  void startAdvertising(BLEService* configService = nullptr);
   
   // Send HID report with current axis and button states
   void sendReport(const int16_t axes[MAX_AXES], uint16_t buttonBitmask);

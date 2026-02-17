@@ -3,7 +3,6 @@
  */
 
 #include "ble_hid.h"
-#include "ble_config.h"
 
 // HID Report Map (same as USB HID descriptor)
 const uint8_t BLEHIDController::HID_REPORT_MAP[] = {
@@ -101,7 +100,7 @@ bool BLEHIDController::begin(const DeviceConfig* config) {
   return true;
 }
 
-void BLEHIDController::startAdvertising() {
+void BLEHIDController::startAdvertising(BLEService* configService) {
   // Advertising packet
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
   Bluefruit.Advertising.addTxPower();
@@ -110,8 +109,10 @@ void BLEHIDController::startAdvertising() {
   // Include HID service
   Bluefruit.Advertising.addService(blehid_);
   
-  // Include config service UUID so WebBluetooth can discover it
-  Bluefruit.Advertising.addUuid(BLE_CONFIG_SERVICE_UUID);
+  // Include config service if provided (required for WebBluetooth discovery)
+  if (configService) {
+    Bluefruit.Advertising.addService(*configService);
+  }
   
   // Include name
   Bluefruit.Advertising.addName();
