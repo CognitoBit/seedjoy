@@ -87,41 +87,103 @@ function initializePinConfiguration() {
     
     // Generate axis pin selectors
     for (let i = 0; i < 4; i++) {
-        const div = createPinSelector(`Axis ${i}`, `axis-pin-${i}`, availablePins, config.getConfig().axes[i].pin);
+        const cfg = config.getConfig().axes[i];
+        const div = createPinSelector(`Axis ${i}`, `axis-pin-${i}`, `axis-enable-${i}`, availablePins, cfg.pin, cfg.enabled, 'axis', i);
         axisPins.appendChild(div);
     }
     
     // Generate button pin selectors
     for (let i = 0; i < 16; i++) {
-        const div = createPinSelector(`Button ${i}`, `button-pin-${i}`, availablePins, config.getConfig().buttons[i].pin);
+        const cfg = config.getConfig().buttons[i];
+        const div = createPinSelector(`Button ${i}`, `button-pin-${i}`, `button-enable-${i}`, availablePins, cfg.pin, cfg.enabled, 'button', i);
         buttonPins.appendChild(div);
     }
+    
+    // Bulk enable/disable buttons
+    document.getElementById('enable-all-axes').addEventListener('click', () => {
+        for (let i = 0; i < 4; i++) {
+            document.getElementById(`axis-enable-${i}`).checked = true;
+            config.updateAxis(i, { enabled: true });
+        }
+    });
+    
+    document.getElementById('disable-all-axes').addEventListener('click', () => {
+        for (let i = 0; i < 4; i++) {
+            document.getElementById(`axis-enable-${i}`).checked = false;
+            config.updateAxis(i, { enabled: false });
+        }
+    });
+    
+    document.getElementById('enable-all-buttons').addEventListener('click', () => {
+        for (let i = 0; i < 16; i++) {
+            document.getElementById(`button-enable-${i}`).checked = true;
+            config.updateButton(i, { enabled: true });
+        }
+    });
+    
+    document.getElementById('disable-all-buttons').addEventListener('click', () => {
+        for (let i = 0; i < 16; i++) {
+            document.getElementById(`button-enable-${i}`).checked = false;
+            config.updateButton(i, { enabled: false });
+        }
+    });
 }
 
 /**
- * Create pin selector UI element
+ * Create pin selector UI element with enable checkbox
  */
-function createPinSelector(label, id, options, selectedValue) {
+function createPinSelector(label, pinId, enableId, options, selectedPin, enabled, type, index) {
     const div = document.createElement('div');
     div.className = 'pin-selector';
     
-    const labelEl = document.createElement('label');
-    labelEl.textContent = label;
+    // Enable checkbox
+    const enableCheckbox = document.createElement('input');
+    enableCheckbox.type = 'checkbox';
+    enableCheckbox.id = enableId;
+    enableCheckbox.checked = enabled;
+    enableCheckbox.addEventListener('change', (e) => {
+        if (type === 'axis') {
+            config.updateAxis(index, { enabled: e.target.checked });
+        } else if (type === 'button') {
+            config.updateButton(index, { enabled: e.target.checked });
+        }
+    });
     
+    const enableLabel = document.createElement('label');
+    enableLabel.className = 'checkbox-label';
+    enableLabel.appendChild(enableCheckbox);
+    enableLabel.appendChild(document.createTextNode(label));
+    
+    // Pin selector
     const select = document.createElement('select');
-    select.id = id;
+    select.id = pinId;
+    select.disabled = !enabled;
     
     options.forEach(opt => {
         const option = document.createElement('option');
         option.value = opt.value;
         option.textContent = opt.label;
-        if (opt.value === selectedValue) {
+        if (opt.value === selectedPin) {
             option.selected = true;
         }
         select.appendChild(option);
     });
     
-    div.appendChild(labelEl);
+    // Enable/disable pin selector based on checkbox
+    enableCheckbox.addEventListener('change', (e) => {
+        select.disabled = !e.target.checked;
+    });
+    
+    // Update config when pin changes
+    select.addEventListener('change', (e) => {
+        if (type === 'axis') {
+            config.updateAxis(index, { pin: parseInt(e.target.value) });
+        } else if (type === 'button') {
+            config.updateButton(index, { pin: parseInt(e.target.value) });
+        }
+    });
+    
+    div.appendChild(enableLabel);
     div.appendChild(select);
     
     return div;

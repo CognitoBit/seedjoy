@@ -41,6 +41,7 @@
         <!-- Pin Configuration Tab -->
         <section id="tab-pins" class="panel tab-content active">
             <h2>Pin Configuration</h2>
+            <p class="safety-notice">⚠️ <strong>SAFETY:</strong> Only enable inputs with physical hardware connected. Floating pins cause random HID input!</p>
             <div class="pin-config-container">
                 <div class="pinout-diagram">
                     <h3>XIAO nRF52840 Pinout</h3>
@@ -50,13 +51,29 @@
                     </div>
                 </div>
                 <div class="pin-assignment">
-                    <h3>Axis Pins</h3>
-                    <div id="axis-pins">
-                        <!-- Axis pin selectors will be generated here -->
+                    <div class="pin-section">
+                        <div class="section-header">
+                            <h3>Axis Pins</h3>
+                            <div class="bulk-buttons">
+                                <button id="enable-all-axes" class="btn-small">Enable All</button>
+                                <button id="disable-all-axes" class="btn-small">Disable All</button>
+                            </div>
+                        </div>
+                        <div id="axis-pins">
+                            <!-- Axis pin selectors will be generated here -->
+                        </div>
                     </div>
-                    <h3>Button Pins</h3>
-                    <div id="button-pins">
-                        <!-- Button pin selectors will be generated here -->
+                    <div class="pin-section">
+                        <div class="section-header">
+                            <h3>Button Pins</h3>
+                            <div class="bulk-buttons">
+                                <button id="enable-all-buttons" class="btn-small">Enable All</button>
+                                <button id="disable-all-buttons" class="btn-small">Disable All</button>
+                            </div>
+                        </div>
+                        <div id="button-pins">
+                            <!-- Button pin selectors will be generated here -->
+                        </div>
                     </div>
                 </div>
             </div>

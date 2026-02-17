@@ -66,7 +66,7 @@ class SeedJoyConfig {
     getDefaultAxis(index, pin) {
         return {
             pin: pin,
-            enabled: true,
+            enabled: false,  // SAFETY: disabled by default (user must enable)
             inverted: false,
             min: 0,
             center: 2048,
@@ -104,7 +104,7 @@ class SeedJoyConfig {
         
         return buttonPins.map((pin, index) => ({
             pin: pin,
-            enabled: true,
+            enabled: false,  // SAFETY: disabled by default (user must enable)
             logicalNumber: index,
             inverted: false
         }));
