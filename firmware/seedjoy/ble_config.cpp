@@ -303,9 +303,11 @@ bool BLEConfigService::deserializeConfig(const uint8_t* data, uint16_t len) {
     }
   }
 
-  // Re-apply to running subsystems (live update without reboot)
+  // Full hardware re-init: recalculates SR pins, srOffset_, totalButtonCount_.
+  // Must use begin() not setConfig() — critical when SR pin assignments or
+  // numChips changed via BLE write.
   if (axes_)    axes_->setConfig(config_);
-  if (buttons_) buttons_->setConfig(config_);
+  if (buttons_) buttons_->begin(config_);
 
   Serial.print("SR: enabled=");
   Serial.print(config_->shiftRegisters.enabled ? "true" : "false");
@@ -345,6 +347,8 @@ void BLEConfigService::configWriteCallback(uint16_t conn_hdl, BLECharacteristic*
     // Save to flash
     if (instance_->storage_ && instance_->config_) {
       if (instance_->storage_->saveConfig(instance_->config_)) {
+        // Refresh the read characteristic so a subsequent BLE read returns the new values
+        instance_->serializeConfig();
         instance_->sendStatus("Configuration saved", true);
         Serial.println("Configuration saved to flash");
       } else {

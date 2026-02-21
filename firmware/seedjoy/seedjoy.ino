@@ -447,7 +447,10 @@ void handleBLEConfigMode() {
         lastButtonLog = millis();
       }
     } else if (elapsedTime >= CONFIG_MODE_TIMEOUT) {
-      // Timeout reached, enable HID
+      // Re-init SR hardware before enabling HID — prevents ghost inputs if a
+      // BLE config write changed SR pin assignments or chip count during the
+      // config window.
+      buttons.begin(&deviceConfig);
       configurationMode = false;
       bleHID.setHIDEnabled(true);
       Serial.println("Config mode timeout - HID enabled");
@@ -511,6 +514,8 @@ void processCommand(String cmd) {
       case 'h':
         // Enable HID mode
         if (currentMode == MODE_BLE) {
+          // Re-init SR hardware before enabling HID to flush any stale pin/chip state
+          buttons.begin(&deviceConfig);
           configurationMode = false;
           bleHID.setHIDEnabled(true);
           Serial.println("HID mode enabled");

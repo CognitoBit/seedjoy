@@ -580,7 +580,7 @@ function handleConnectionChange(connected) {
         readBtn.disabled = false;
         writeBtn.disabled = false;
         
-        document.getElementById('device-name').textContent = ble.getDeviceName();
+        document.getElementById('device-name').textContent = activeConnection ? activeConnection.getDeviceName() : '';
         document.getElementById('firmware-version').textContent = '0.1.0'; // From status
 
         // Auto-start button stream if the button-mapping tab is already active
@@ -594,7 +594,7 @@ function handleConnectionChange(connected) {
         // Show configuration mode notice
         showNotification(
             'Configuration Mode Active', 
-            'The device is in configuration mode for 10 seconds. HID input is disabled to prevent unwanted keystrokes/mouse movements. Hold the MODE button or send "C" via serial to stay in config mode.',
+            'The device is in configuration mode for 60 seconds. HID input is disabled to prevent unwanted keystrokes/mouse movements. Hold the MODE button or send \'C\' via serial to stay in config mode.',
             'info',
             10000
         );
