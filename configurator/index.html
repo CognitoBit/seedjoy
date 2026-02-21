@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SeedJoy Configurator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>🎮 SeedJoy Configurator</h1>
+            <p>Configure your XIAO nRF52840 game controller</p>
+        </header>
+
+        <!-- Connection Panel -->
+        <section class="panel connection-panel">
+            <h2>Device Connection</h2>
+            
+            <!-- Connection Mode Selector -->
+            <div class="connection-mode">
+                <label>Connection Mode:</label>
+                <div class="mode-buttons">
+                    <button id="mode-bluetooth" class="mode-btn active" data-mode="bluetooth">
+                        📡 Bluetooth
+                    </button>
+                    <button id="mode-serial" class="mode-btn" data-mode="serial">
+                        🔌 USB Serial
+                    </button>
+                </div>
+                <p class="mode-hint" id="mode-hint">WebBluetooth - wireless connection (Chrome/Edge only)</p>
+            </div>
+            
+            <div class="connection-status">
+                <div id="status-indicator" class="status-indicator disconnected"></div>
+                <span id="status-text">Not Connected</span>
+            </div>
+            <button id="connect-btn" class="btn btn-primary">Connect Device</button>
+            <button id="disconnect-btn" class="btn btn-secondary" style="display: none;">Disconnect</button>
+            <div id="device-info" style="display: none;">
+                <p><strong>Device:</strong> <span id="device-name">-</span></p>
+                <p><strong>Firmware:</strong> <span id="firmware-version">-</span></p>
+                <p><strong>Battery:</strong> <span id="battery-level">-</span></p>
+            </div>
+        </section>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="pins">Pin Config</button>
+            <button class="tab-btn" data-tab="axes">Axis Calibration</button>
+            <button class="tab-btn" data-tab="buttons">Button Mapping</button>
+            <button class="tab-btn" data-tab="advanced">Advanced</button>
+        </div>
+
+        <!-- Pin Configuration Tab -->
+        <section id="tab-pins" class="panel tab-content active">
+            <h2>Pin Configuration</h2>
+            <p class="safety-notice">⚠️ <strong>SAFETY:</strong> Only enable inputs with physical hardware connected. Floating pins cause random HID input!</p>
+            <div class="pin-config-container">
+                <div class="pinout-diagram">
+                    <h3>XIAO nRF52840 Pinout</h3>
+                    <div id="pinout-svg">
+                        <img
+                            id="pinout-image"
+                            src="https://files.seeedstudio.com/wiki/XIAO-BLE/pinout2.png"
+                            alt="XIAO nRF52840 Pinout"
+                            title="Click to enlarge"
+                        >
+                        <div class="pinout-legend">
+                            <div class="legend-row"><span class="legend-dot axes"></span><strong>Axes (Analog):</strong>&nbsp;A0 (P0.02) · A1 (P0.03) · A2 (P0.28) · A3 (P0.29)</div>
+                            <div class="legend-row"><span class="legend-dot sr"></span><strong>Shift Registers:</strong>&nbsp;D6 Data · D7 Clock · D8 Load</div>
+                            <div class="legend-row"><span class="legend-dot other"></span><strong>Other:</strong>&nbsp;D9 Mode Select · D4, D5, D10 Direct Buttons</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="pin-assignment">
+                    <div class="pin-section">
+                        <div class="section-header">
+                            <h3>Axis Pins</h3>
+                            <div class="bulk-buttons">
+                                <button id="enable-all-axes" class="btn-small">Enable All</button>
+                                <button id="disable-all-axes" class="btn-small">Disable All</button>
+                            </div>
+                        </div>
+                        <div id="axis-pins">
+                            <!-- Axis pin selectors will be generated here -->
+                        </div>
+                    </div>
+                    <div class="pin-section">
+                        <div class="section-header">
+                            <h3>Button Pins</h3>
+                            <div class="bulk-buttons">
+                                <button id="enable-all-buttons" class="btn-small">Enable All</button>
+                                <button id="disable-all-buttons" class="btn-small">Disable All</button>
+                            </div>
+                        </div>
+                        <div id="button-pins">
+                            <!-- Button pin selectors will be generated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Axis Calibration Tab -->
+        <section id="tab-axes" class="panel tab-content">
+            <h2>Axis Calibration</h2>
+            <div class="calibration-container">
+                <div class="axis-select">
+                    <label for="calibration-axis">Select Axis:</label>
+                    <select id="calibration-axis">
+                        <option value="0">Axis 0 (X)</option>
+                        <option value="1">Axis 1 (Y)</option>
+                        <option value="2">Axis 2 (Z)</option>
+                        <option value="3">Axis 3 (Rz)</option>
+                    </select>
+                </div>
+
+                <div class="axis-preview">
+                    <h3>Live Preview</h3>
+                    <div class="axis-bar-container">
+                        <label>Raw Value:</label>
+                        <div class="bar-wrapper">
+                            <div id="raw-value-bar" class="bar"></div>
+                        </div>
+                        <span id="raw-value-text">0</span>
+                    </div>
+                    <div class="axis-bar-container">
+                        <label>Processed:</label>
+                        <div class="bar-wrapper">
+                            <div id="processed-value-bar" class="bar"></div>
+                        </div>
+                        <span id="processed-value-text">0</span>
+                    </div>
+                </div>
+
+                <div class="calibration-wizard">
+                    <h3>Calibration Wizard</h3>
+                    <button id="calibrate-min-btn" class="btn">Set Minimum</button>
+                    <button id="calibrate-center-btn" class="btn">Set Center</button>
+                    <button id="calibrate-max-btn" class="btn">Set Maximum</button>
+                    <p class="hint">Move axis to desired position and click button to set calibration point</p>
+                </div>
+
+                <div class="axis-settings">
+                    <h3>Axis Settings</h3>
+                    <label>
+                        <input type="checkbox" id="axis-inverted"> Invert Axis
+                    </label>
+                    <label>
+                        Deadzone: <span id="deadzone-value">5</span>%
+                        <input type="range" id="deadzone-slider" min="0" max="50" value="5">
+                    </label>
+                    <label>
+                        Curve:
+                        <select id="curve-type">
+                            <option value="0">Linear</option>
+                            <option value="1">Exponential</option>
+                            <option value="2">Custom</option>
+                        </select>
+                    </label>
+                    <div id="expo-setting" style="display: none;">
+                        <label>
+                            Expo Factor: <span id="expo-value">0.0</span>
+                            <input type="range" id="expo-slider" min="0" max="100" value="0">
+                        </label>
+                    </div>
+                    <label>
+                        Smoothing:
+                        <select id="smoothing-select">
+                            <option value="0">Off</option>
+                            <option value="2">2 samples</option>
+                            <option value="4">4 samples</option>
+                            <option value="8">8 samples</option>
+                        </select>
+                    </label>
+                </div>
+            </div>
+        </section>
+
+        <!-- Button Mapping Tab -->
+        <section id="tab-buttons" class="panel tab-content">
+            <h2>Button Mapping</h2>
+            <p class="hint">ℹ️ These mappings apply to direct GPIO buttons only. Shift-register buttons (SR-only mode) use fixed logical numbering (0–55) and do not require remapping.</p>
+            <div class="button-grid">
+                <!-- Button mapping grid will be generated here -->
+            </div>
+            <div class="button-test">
+                <h3>Button Test</h3>
+                <p>Press buttons to see them light up</p>
+                <div id="button-test-grid">
+                    <!-- Button test indicators will be generated here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Advanced Tab -->
+        <section id="tab-advanced" class="panel tab-content">
+            <h2>Advanced Settings</h2>
+            <div class="settings-grid">
+                <div class="settings-group">
+                    <h3>Device Settings</h3>
+                    <label>
+                        Device Name:
+                        <input type="text" id="device-name-input" maxlength="31" value="SeedJoy">
+                    </label>
+                    <label>
+                        Operation Mode:
+                        <select id="mode-select">
+                            <option value="0">USB</option>
+                            <option value="1">BLE</option>
+                            <option value="2">Auto</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="settings-group">
+                    <h3>USB Settings</h3>
+                    <label>
+                        Poll Rate:
+                        <select id="usb-poll-rate">
+                            <option value="1">1000 Hz (1ms)</option>
+                            <option value="2">500 Hz (2ms)</option>
+                            <option value="4">250 Hz (4ms)</option>
+                            <option value="8">125 Hz (8ms)</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="settings-group">
+                    <h3>BLE Settings</h3>
+                    <label>
+                        Connection Interval:
+                        <select id="ble-interval">
+                            <option value="2">2.5 ms (low latency)</option>
+                            <option value="6">7.5 ms (balanced)</option>
+                            <option value="12">15 ms (power saving)</option>
+                        </select>
+                    </label>
+                    <label>
+                        TX Power:
+                        <select id="ble-tx-power">
+                            <option value="-40">-40 dBm (lowest)</option>
+                            <option value="-20">-20 dBm</option>
+                            <option value="-16">-16 dBm</option>
+                            <option value="-12">-12 dBm</option>
+                            <option value="-8">-8 dBm</option>
+                            <option value="-4">-4 dBm</option>
+                            <option value="0" selected>0 dBm (default)</option>
+                            <option value="4">+4 dBm (highest)</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="settings-group">
+                    <h3>Shift Registers (74HC165)</h3>
+                    <label>
+                        <input type="checkbox" id="shift-reg-enabled"> Enable Shift Registers
+                    </label>
+                    <label>
+                        Number of Chips:
+                        <select id="shift-reg-chips">
+                            <option value="1">1 (8 buttons)</option>
+                            <option value="2">2 (16 buttons)</option>
+                            <option value="3">3 (24 buttons)</option>
+                            <option value="4">4 (32 buttons)</option>
+                            <option value="5">5 (40 buttons)</option>
+                            <option value="6">6 (48 buttons)</option>
+                            <option value="7">7 (56 buttons)</option>
+                            <option value="8">8 (64 buttons)</option>
+                            <option value="16">16 (128 buttons)</option>
+                        </select>
+                    </label>
+                    <label>
+                        Data Pin (Q7):
+                        <select id="shift-reg-data-pin">
+                            <option value="255">Not Used</option>
+                        </select>
+                    </label>
+                    <label>
+                        Clock Pin (CLK):
+                        <select id="shift-reg-clock-pin">
+                            <option value="255">Not Used</option>
+                        </select>
+                    </label>
+                    <label>
+                        Load Pin (SH/LD):
+                        <select id="shift-reg-load-pin">
+                            <option value="255">Not Used</option>
+                        </select>
+                    </label>
+                    <label>
+                        <input type="checkbox" id="shift-reg-inverted"> Invert Logic
+                    </label>
+                    <p class="hint">
+                        📌 Default pins: D6 (data), D7 (clock), D8 (load)<br>
+                        Shift register buttons start at button 16+ (direct buttons 0-15)
+                    </p>
+                </div>
+
+                <div class="settings-group">
+                    <h3>Power Management</h3>
+                    <label>
+                        <input type="checkbox" id="auto-sleep"> Auto Sleep (BLE only)
+                    </label>
+                    <label>
+                        Sleep Timeout (seconds):
+                        <input type="number" id="sleep-timeout" min="60" max="3600" value="600">
+                    </label>
+                </div>
+            </div>
+        </section>
+
+        <!-- Action Buttons -->
+        <section class="panel action-panel">
+            <button id="read-config-btn" class="btn btn-primary" disabled>Read from Device</button>
+            <button id="write-config-btn" class="btn btn-success" disabled>Write to Device</button>
+            <button id="reset-config-btn" class="btn btn-warning">Reset to Defaults</button>
+            <button id="export-config-btn" class="btn">Export Config</button>
+            <button id="import-config-btn" class="btn">Import Config</button>
+            <input type="file" id="import-file-input" accept=".json" style="display: none;">
+        </section>
+
+        <!-- Footer -->
+        <footer>
+            <p>SeedJoy Configurator v0.1.0 | <a href="https://github.com/yourusername/seedjoy" target="_blank">GitHub</a></p>
+            <p class="hint">Requires Chrome, Edge, or Opera with WebBluetooth support</p>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // Click-to-zoom for pinout image
+        document.addEventListener('DOMContentLoaded', function () {
+            const img = document.getElementById('pinout-image');
+            if (img) {
+                img.addEventListener('click', function () {
+                    img.classList.toggle('zoomed');
+                });
+            }
+        });
+    </script>
+    <script src="ble.js"></script>
+    <script src="serial.js"></script>
+    <script src="config.js"></script>
+    <script src="calibration.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
