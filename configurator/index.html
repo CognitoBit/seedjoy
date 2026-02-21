@@ -61,23 +61,16 @@
                 <div class="pinout-diagram">
                     <h3>XIAO nRF52840 Pinout</h3>
                     <div id="pinout-svg">
-                        <div style="padding: 15px; background: #2a2a2a; border-radius: 8px; font-family: monospace; font-size: 13px;">
-                            <div style="margin-bottom: 10px;"><strong>📊 Axes (Analog):</strong></div>
-                            <div style="margin-left: 10px; margin-bottom: 15px;">
-                                A0/D0 (P0.02) • A1/D1 (P0.03)<br>
-                                A2/D2 (P0.28) • A3/D3 (P0.29)
-                            </div>
-                            <div style="margin-bottom: 10px;"><strong>🔘 Shift Registers (74HC165):</strong></div>
-                            <div style="margin-left: 10px; margin-bottom: 15px;">
-                                D6/TX (P1.11) - Data (Q7)<br>
-                                D7/RX (P1.12) - Clock<br>
-                                D8/SCK (P1.13) - Load
-                            </div>
-                            <div style="margin-bottom: 10px;"><strong>⚙️ Other:</strong></div>
-                            <div style="margin-left: 10px;">
-                                D9/MISO (P1.14) - Mode Select<br>
-                                D4-D5, D10 - Optional Direct Buttons
-                            </div>
+                        <img
+                            id="pinout-image"
+                            src="https://files.seeedstudio.com/wiki/XIAO-BLE/pinout2.png"
+                            alt="XIAO nRF52840 Pinout"
+                            title="Click to enlarge"
+                        >
+                        <div class="pinout-legend">
+                            <div class="legend-row"><span class="legend-dot axes"></span><strong>Axes (Analog):</strong>&nbsp;A0 (P0.02) · A1 (P0.03) · A2 (P0.28) · A3 (P0.29)</div>
+                            <div class="legend-row"><span class="legend-dot sr"></span><strong>Shift Registers:</strong>&nbsp;D6 Data · D7 Clock · D8 Load</div>
+                            <div class="legend-row"><span class="legend-dot other"></span><strong>Other:</strong>&nbsp;D9 Mode Select · D4, D5, D10 Direct Buttons</div>
                         </div>
                     </div>
                 </div>
@@ -189,6 +182,7 @@
         <!-- Button Mapping Tab -->
         <section id="tab-buttons" class="panel tab-content">
             <h2>Button Mapping</h2>
+            <p class="hint">ℹ️ These mappings apply to direct GPIO buttons only. Shift-register buttons (SR-only mode) use fixed logical numbering (0–55) and do not require remapping.</p>
             <div class="button-grid">
                 <!-- Button mapping grid will be generated here -->
             </div>
@@ -336,6 +330,17 @@
     </div>
 
     <!-- Scripts -->
+    <script>
+        // Click-to-zoom for pinout image
+        document.addEventListener('DOMContentLoaded', function () {
+            const img = document.getElementById('pinout-image');
+            if (img) {
+                img.addEventListener('click', function () {
+                    img.classList.toggle('zoomed');
+                });
+            }
+        });
+    </script>
     <script src="ble.js"></script>
     <script src="serial.js"></script>
     <script src="config.js"></script>

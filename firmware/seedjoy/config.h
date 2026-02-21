@@ -116,8 +116,9 @@ struct ShiftRegisterConfig {
   bool inverted;            // Invert button logic
   
   // Defaults (using predefined SR_ pins)
+  // SR-only mode: 7 chips = 56 buttons (covers up to ~50 physical buttons)
   ShiftRegisterConfig() :
-    enabled(false), numChips(1),
+    enabled(true), numChips(7),
     dataPin(D6), clockPin(D7), loadPin(D8),
     inverted(false) {}
 };

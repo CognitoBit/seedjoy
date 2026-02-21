@@ -131,6 +131,15 @@ function initializeTabs() {
             } else {
                 calibration.stopMonitoring();
             }
+
+            // Start/stop button streaming on the button-test tab (serial path only)
+            if (activeConnection && typeof activeConnection.startButtonStream === 'function') {
+                if (tabName === 'buttons') {
+                    activeConnection.startButtonStream().catch(() => {});
+                } else {
+                    activeConnection.stopButtonStream().catch(() => {});
+                }
+            }
         });
     });
 }
@@ -355,8 +364,8 @@ function initializeButtonMapping() {
         buttonGrid.appendChild(item);
     }
     
-    // Generate button test indicators
-    for (let i = 0; i < 16; i++) {
+    // Generate button test indicators (56 = 7 chips × 8)
+    for (let i = 0; i < 56; i++) {
         const indicator = document.createElement('div');
         indicator.className = 'button-indicator';
         indicator.id = `button-indicator-${i}`;
@@ -573,6 +582,14 @@ function handleConnectionChange(connected) {
         
         document.getElementById('device-name').textContent = ble.getDeviceName();
         document.getElementById('firmware-version').textContent = '0.1.0'; // From status
+
+        // Auto-start button stream if the button-mapping tab is already active
+        if (activeConnection && typeof activeConnection.startButtonStream === 'function') {
+            const currentTab = document.querySelector('.tab-btn.active')?.getAttribute('data-tab');
+            if (currentTab === 'buttons') {
+                activeConnection.startButtonStream().catch(() => {});
+            }
+        }
         
         // Show configuration mode notice
         showNotification(
@@ -592,9 +609,14 @@ function handleConnectionChange(connected) {
         writeBtn.disabled = true;
 
         // Clear live button indicators when disconnected
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < 56; i++) {
             const el = document.getElementById(`button-indicator-${i}`);
             if (el) el.classList.remove('pressed');
+        }
+
+        // Ensure streaming is halted on the firmware side
+        if (activeConnection && typeof activeConnection.stopButtonStream === 'function') {
+            activeConnection.stopButtonStream().catch(() => {});
         }
     }
 }
@@ -610,11 +632,14 @@ function handleBatteryChange(batteryLevel) {
  * Handle real-time button updates from BLE
  */
 function handleButtonData(data) {
-    // data.bitmask is a 16-bit bitmask (bit 0 = Button 0)
-    for (let i = 0; i < 16; i++) {
+    // data.states is a Uint8Array of 8 bytes (64 bits, buttons 0-63)
+    // We only show 56 indicators (7 SR chips × 8 = 56 buttons)
+    for (let i = 0; i < 56; i++) {
         const el = document.getElementById(`button-indicator-${i}`);
         if (!el) continue;
-        const pressed = ((data.bitmask >> i) & 0x1) === 1;
+        const byteIndex = Math.floor(i / 8);
+        const bitIndex = i % 8;
+        const pressed = data.states ? ((data.states[byteIndex] >> bitIndex) & 0x1) === 1 : false;
         el.classList.toggle('pressed', pressed);
     }
 }
@@ -624,14 +649,57 @@ function handleButtonData(data) {
  */
 function updateUIFromConfig() {
     const cfg = config.getConfig();
-    
-    // Update all UI elements to match config
-    // This is a simplified version - full implementation would update all fields
-    
-    document.getElementById('device-name-input').value = cfg.deviceName;
-    document.getElementById('mode-select').value = cfg.mode;
-    
-    console.log('UI updated from configuration');
+
+    // ── Device & connectivity ──────────────────────────────────────────────
+    document.getElementById('device-name-input').value      = cfg.deviceName  ?? '';
+    document.getElementById('mode-select').value            = cfg.mode        ?? 1;
+    document.getElementById('usb-poll-rate').value          = cfg.usbPollRate ?? 1;
+    document.getElementById('ble-interval').value           = cfg.bleConnInterval ?? 2;
+    document.getElementById('ble-tx-power').value           = cfg.bleTxPower  ?? 0;
+
+    // ── Power management ──────────────────────────────────────────────────
+    document.getElementById('auto-sleep').checked           = !!cfg.autoSleep;
+    document.getElementById('sleep-timeout').value          = cfg.sleepTimeout ?? 600;
+
+    // ── Shift registers ───────────────────────────────────────────────────
+    const sr = cfg.shiftRegisters || {};
+    document.getElementById('shift-reg-enabled').checked    = !!sr.enabled;
+    document.getElementById('shift-reg-chips').value        = sr.numChips  ?? 7;
+    document.getElementById('shift-reg-inverted').checked   = !!sr.inverted;
+
+    // Re-populate pin dropdowns (they may not have been filled yet on first load)
+    const availablePins = SeedJoyConfig.getAvailablePins();
+    populatePinDropdown('shift-reg-data-pin',  availablePins, sr.dataPin  ?? 0x2B);
+    populatePinDropdown('shift-reg-clock-pin', availablePins, sr.clockPin ?? 0x2C);
+    populatePinDropdown('shift-reg-load-pin',  availablePins, sr.loadPin  ?? 0x2D);
+
+    // ── Axes ──────────────────────────────────────────────────────────────
+    if (cfg.axes) {
+        cfg.axes.forEach((ax, i) => {
+            const enableEl = document.getElementById(`axis-enable-${i}`);
+            const pinEl    = document.getElementById(`axis-pin-${i}`);
+            if (enableEl) enableEl.checked    = !!ax.enabled;
+            if (pinEl)    pinEl.value         = ax.pin ?? 0xFF;
+            if (pinEl)    pinEl.disabled      = !ax.enabled;
+        });
+    }
+
+    // ── GPIO buttons ──────────────────────────────────────────────────────
+    if (cfg.buttons) {
+        cfg.buttons.forEach((btn, i) => {
+            const enableEl  = document.getElementById(`button-enable-${i}`);
+            const pinEl     = document.getElementById(`button-pin-${i}`);
+            const logicalEl = document.getElementById(`button-logical-${i}`);
+            const invertEl  = document.getElementById(`button-invert-${i}`);
+            if (enableEl)  enableEl.checked   = !!btn.enabled;
+            if (pinEl)     pinEl.value        = btn.pin ?? 0xFF;
+            if (pinEl)     pinEl.disabled     = !btn.enabled;
+            if (logicalEl) logicalEl.value    = btn.logicalNumber ?? i;
+            if (invertEl)  invertEl.checked   = !!btn.inverted;
+        });
+    }
+
+    console.log('UI updated from configuration (SR chips:', sr.numChips, ')');
 }
 
 /**

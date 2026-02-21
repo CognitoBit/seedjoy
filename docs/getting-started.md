@@ -22,8 +22,8 @@ Follow the [Hardware Wiring Guide](hardware.md) to connect your potentiometers a
 
 **Minimal setup for testing:**
 - 2 potentiometers on A0 and A1
-- 4 buttons on D1, D2, D3, D4
-- Mode select switch on D0 (or jumper wire)
+- 4 buttons on D4, D5, D10, and one shift-register button
+- Mode select switch on D9 (or jumper wire to GND for BLE, leave open for USB)
 
 ## Step 2: Install Arduino IDE
 
@@ -53,6 +53,8 @@ Follow the [Hardware Wiring Guide](hardware.md) to connect your potentiometers a
    - **Adafruit LittleFS**
    - **Bluefruit nRF52 Libraries** (should be included with board package)
 
+> **Note (Seeed nRF52 Boards + Serial):** When using the `Seeed nRF52 Boards` package (recommended for BLE), any sketch that uses `Serial` must add `#include <Adafruit_TinyUSB.h>` at the top — otherwise it will fail to compile. The SeedJoy firmware already handles this inside `usb_hid.cpp`, so no change is needed for this project.
+
 ## Step 5: Open SeedJoy Firmware
 
 1. Navigate to the downloaded/cloned SeedJoy repository
@@ -75,7 +77,7 @@ Follow the [Hardware Wiring Guide](hardware.md) to connect your potentiometers a
 
 **If upload fails:**
 - Double-click the RESET button on XIAO to enter bootloader mode
-- XIAO should appear as a USB drive called "XIAO-SENSE" or "XIAO"
+- XIAO nRF52840 (non-Sense) will appear as a USB drive called **"XIAO"**
 - Try uploading again immediately
 
 ## Step 8: Verify Operation

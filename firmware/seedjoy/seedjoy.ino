@@ -45,6 +45,8 @@ bool configurationMode = false;
 uint32_t bleConnectionTime = 0;
 const uint32_t CONFIG_MODE_TIMEOUT = 60000; // 60 seconds after connection (was 10s - extended for safety)
 bool wasConnected = false;
+bool serialButtonStream = false;   // true while browser is on the Button Mapping tab
+uint32_t lastButtonStreamTime = 0; // rate-limit to ~20 Hz
 
 // Battery monitoring
 #define VBAT_PIN PIN_VBAT
@@ -209,6 +211,19 @@ void loop() {
     }
   }
   
+  // Stream button states over Serial for the Web Serial button-test tab (~20 Hz)
+  if (serialButtonStream && (now - lastButtonStreamTime >= 50)) {
+    uint8_t bBytes[8];
+    buttons.getExtendedButtonStates(bBytes, 8);
+    Serial.print("{\"type\":\"buttons\",\"data\":{\"states\":[");
+    for (int bi = 0; bi < 8; bi++) {
+      if (bi > 0) Serial.print(",");
+      Serial.print(bBytes[bi]);
+    }
+    Serial.println("]}}");
+    lastButtonStreamTime = now;
+  }
+
   // Small delay to prevent tight looping (optional)
   // delayMicroseconds(100);
 }
@@ -278,9 +293,11 @@ void initializeHardware() {
     }
   }
   
-  Serial.println("Buttons:");
+  Serial.println("Buttons (GPIO):");
+  bool anyGpio = false;
   for (int i = 0; i < MAX_BUTTONS; i++) {
     if (deviceConfig.buttons[i].enabled) {
+      anyGpio = true;
       Serial.print("  Button ");
       Serial.print(i);
       Serial.print(": Pin ");
@@ -288,6 +305,19 @@ void initializeHardware() {
       Serial.print(" -> Logical ");
       Serial.println(deviceConfig.buttons[i].logicalNumber);
     }
+  }
+  if (!anyGpio) Serial.println("  (none enabled - SR-only mode)");
+
+  Serial.println("Shift Registers:");
+  if (deviceConfig.shiftRegisters.enabled) {
+    Serial.print("  Chips  : "); Serial.println(deviceConfig.shiftRegisters.numChips);
+    Serial.print("  Buttons: "); Serial.println(deviceConfig.shiftRegisters.numChips * 8);
+    Serial.print("  Data   : D"); Serial.println(deviceConfig.shiftRegisters.dataPin);
+    Serial.print("  Clock  : D"); Serial.println(deviceConfig.shiftRegisters.clockPin);
+    Serial.print("  Load   : D"); Serial.println(deviceConfig.shiftRegisters.loadPin);
+    Serial.print("  Inverted: "); Serial.println(deviceConfig.shiftRegisters.inverted ? "yes" : "no");
+  } else {
+    Serial.println("  (disabled)");
   }
 }
 
@@ -312,14 +342,15 @@ void sendHIDReports() {
     axisValues[i] = axes.getAxisValue(i);
   }
   
-  // Gather button states
-  uint16_t buttonBitmask = buttons.getButtonBitmask();
+  // Gather button states (8 bytes = 64 buttons)
+  uint8_t buttonBytes[8];
+  buttons.getExtendedButtonStates(buttonBytes, 8);
   
   // Send via appropriate interface
   if (currentMode == MODE_USB) {
-    usbHID.sendReport(axisValues, buttonBitmask);
+    usbHID.sendReport(axisValues, buttonBytes);
   } else if (currentMode == MODE_BLE) {
-    bleHID.sendReport(axisValues, buttonBitmask);
+    bleHID.sendReport(axisValues, buttonBytes);
   }
 }
 
@@ -514,31 +545,180 @@ void processCommand(String cmd) {
   else if (cmd == "ping") {
     Serial.println("{\"type\":\"pong\"}");
   }
+  else if (cmd == "stream_buttons") {
+    serialButtonStream = true;
+    Serial.println("{\"type\":\"status\",\"message\":\"Button stream started\",\"success\":true}");
+  }
+  else if (cmd == "stop_stream") {
+    serialButtonStream = false;
+    Serial.println("{\"type\":\"status\",\"message\":\"Button stream stopped\",\"success\":true}");
+  }
   else {
     Serial.print("Unknown command: ");
     Serial.println(cmd);
   }
 }
 
-void sendConfigAsJSON() {
-  // Note: This is a simplified version - full JSON serialization would use ArduinoJson
-  Serial.print("{\"type\":\"config\",\"data\":{");
-  Serial.print("\"deviceName\":\"");
-  Serial.print(deviceConfig.deviceName);
-  Serial.print("\",\"mode\":");
-  Serial.print(deviceConfig.mode);
-  Serial.print(",\"usbPollRate\":");
-  Serial.print(deviceConfig.usbPollRate);
-  Serial.print(",\"bleConnInterval\":");
-  Serial.print(deviceConfig.bleConnInterval);
-  Serial.print(",\"bleTxPower\":");
-  Serial.print(deviceConfig.bleTxPower);
-  // Add more fields as needed...
-  Serial.println("}}");
+// ─── JSON helpers (no external library needed) ───────────────────────────────
+// Extract an integer value for a key from a flat JSON string.
+// Returns defaultVal if key not found.
+int extractJsonInt(const String& json, const String& key, int defaultVal = 0) {
+  String search = "\"" + key + "\":";  // e.g. "numChips":
+  int idx = json.indexOf(search);
+  if (idx < 0) return defaultVal;
+  idx += search.length();
+  // Skip whitespace
+  while (idx < (int)json.length() && json[idx] == ' ') idx++;
+  // Read digits (and optional leading minus)
+  String num = "";
+  if (idx < (int)json.length() && json[idx] == '-') { num += '-'; idx++; }
+  while (idx < (int)json.length() && isdigit(json[idx])) { num += json[idx++]; }
+  return num.length() ? num.toInt() : defaultVal;
 }
 
-void receiveConfigFromJSON(String jsonData) {
-  // Note: This is a placeholder - full implementation would parse JSON
-  // For now, just acknowledge receipt
-  Serial.println("{\"type\":\"status\",\"message\":\"Config write not yet implemented\",\"success\":false}");
+// Extract a boolean value for a key. Returns defaultVal if key not found.
+bool extractJsonBool(const String& json, const String& key, bool defaultVal = false) {
+  String search = "\"" + key + "\":";  // e.g. "enabled":
+  int idx = json.indexOf(search);
+  if (idx < 0) return defaultVal;
+  idx += search.length();
+  while (idx < (int)json.length() && json[idx] == ' ') idx++;
+  if (idx + 3 < (int)json.length() && json.substring(idx, idx + 4) == "true")  return true;
+  if (idx + 4 < (int)json.length() && json.substring(idx, idx + 5) == "false") return false;
+  return defaultVal;
+}
+
+// Extract a string value for a key (returns content between the quotes).
+// Returns defaultVal if key not found.
+String extractJsonStr(const String& json, const String& key, const String& defaultVal = "") {
+  String search = "\"" + key + "\":\"";
+  int idx = json.indexOf(search);
+  if (idx < 0) return defaultVal;
+  idx += search.length();
+  int end = json.indexOf('"', idx);
+  if (end < 0) return defaultVal;
+  return json.substring(idx, end);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+void sendConfigAsJSON() {
+  Serial.print("{\"type\":\"config\",\"data\":{");
+
+  // Device settings
+  Serial.print("\"deviceName\":\"");   Serial.print(deviceConfig.deviceName);  Serial.print("\",");
+  Serial.print("\"mode\":");           Serial.print(deviceConfig.mode);          Serial.print(",");
+  Serial.print("\"usbPollRate\":");    Serial.print(deviceConfig.usbPollRate);   Serial.print(",");
+  Serial.print("\"bleConnInterval\":"); Serial.print(deviceConfig.bleConnInterval); Serial.print(",");
+  Serial.print("\"bleTxPower\":");     Serial.print(deviceConfig.bleTxPower);    Serial.print(",");
+  Serial.print("\"autoSleep\":");      Serial.print(deviceConfig.autoSleep ? "true" : "false"); Serial.print(",");
+  Serial.print("\"sleepTimeout\":");   Serial.print(deviceConfig.sleepTimeout);  Serial.print(",");
+
+  // Shift register config
+  Serial.print("\"shiftRegisters\":{");
+  Serial.print("\"enabled\":");  Serial.print(deviceConfig.shiftRegisters.enabled  ? "true" : "false"); Serial.print(",");
+  Serial.print("\"numChips\":"); Serial.print(deviceConfig.shiftRegisters.numChips); Serial.print(",");
+  Serial.print("\"dataPin\":");  Serial.print(deviceConfig.shiftRegisters.dataPin);  Serial.print(",");
+  Serial.print("\"clockPin\":"); Serial.print(deviceConfig.shiftRegisters.clockPin); Serial.print(",");
+  Serial.print("\"loadPin\":");  Serial.print(deviceConfig.shiftRegisters.loadPin);  Serial.print(",");
+  Serial.print("\"inverted\":"); Serial.print(deviceConfig.shiftRegisters.inverted  ? "true" : "false");
+  Serial.print("},");
+
+  // Axes
+  Serial.print("\"axes\":[");
+  for (int i = 0; i < MAX_AXES; i++) {
+    if (i > 0) Serial.print(",");
+    Serial.print("{");
+    Serial.print("\"enabled\":");   Serial.print(deviceConfig.axes[i].enabled   ? "true" : "false"); Serial.print(",");
+    Serial.print("\"pin\":");       Serial.print(deviceConfig.axes[i].pin);       Serial.print(",");
+    Serial.print("\"min\":");       Serial.print(deviceConfig.axes[i].min);       Serial.print(",");
+    Serial.print("\"center\":");    Serial.print(deviceConfig.axes[i].center);    Serial.print(",");
+    Serial.print("\"max\":");       Serial.print(deviceConfig.axes[i].max);       Serial.print(",");
+    Serial.print("\"deadzone\":");  Serial.print(deviceConfig.axes[i].deadzone);  Serial.print(",");
+    Serial.print("\"curveType\":"); Serial.print(deviceConfig.axes[i].curveType); Serial.print(",");
+    Serial.print("\"expoFactor\":"); Serial.print(deviceConfig.axes[i].expoFactor, 2); Serial.print(",");
+    Serial.print("\"inverted\":");  Serial.print(deviceConfig.axes[i].inverted   ? "true" : "false"); Serial.print(",");
+    Serial.print("\"smoothing\":"); Serial.print(deviceConfig.axes[i].smoothing);
+    Serial.print("}");
+  }
+  Serial.print("],");
+
+  // Buttons
+  Serial.print("\"buttons\":[");
+  for (int i = 0; i < MAX_BUTTONS; i++) {
+    if (i > 0) Serial.print(",");
+    Serial.print("{");
+    Serial.print("\"enabled\":");      Serial.print(deviceConfig.buttons[i].enabled      ? "true" : "false"); Serial.print(",");
+    Serial.print("\"pin\":");           Serial.print(deviceConfig.buttons[i].pin);           Serial.print(",");
+    Serial.print("\"logicalNumber\":"); Serial.print(deviceConfig.buttons[i].logicalNumber); Serial.print(",");
+    Serial.print("\"inverted\":");      Serial.print(deviceConfig.buttons[i].inverted      ? "true" : "false");
+    Serial.print("}");
+  }
+  Serial.println("]}}");
+}
+
+void receiveConfigFromJSON(String json) {
+  // Device settings
+  String name = extractJsonStr(json, "deviceName");
+  if (name.length() > 0) {
+    name = name.substring(0, 31);  // Enforce max length
+    strncpy(deviceConfig.deviceName, name.c_str(), sizeof(deviceConfig.deviceName) - 1);
+    deviceConfig.deviceName[sizeof(deviceConfig.deviceName) - 1] = '\0';
+  }
+
+  int modeVal = extractJsonInt(json, "mode", -1);
+  if (modeVal >= 0 && modeVal <= 2) deviceConfig.mode = (OperationMode)modeVal;
+
+  int pollRate = extractJsonInt(json, "usbPollRate", -1);
+  if (pollRate > 0) deviceConfig.usbPollRate = (uint8_t)pollRate;
+
+  int bleInterval = extractJsonInt(json, "bleConnInterval", -1);
+  if (bleInterval > 0) deviceConfig.bleConnInterval = (uint16_t)bleInterval;
+
+  int txPower = extractJsonInt(json, "bleTxPower", -99);
+  if (txPower != -99) deviceConfig.bleTxPower = (int8_t)txPower;
+
+  // Power management
+  if (json.indexOf("\"autoSleep\":") >= 0)
+    deviceConfig.autoSleep = extractJsonBool(json, "autoSleep");
+  int sleepTimeout = extractJsonInt(json, "sleepTimeout", -1);
+  if (sleepTimeout > 0) deviceConfig.sleepTimeout = (uint16_t)sleepTimeout;
+
+  // Shift registers — locate the shiftRegisters object
+  int srIdx = json.indexOf("\"shiftRegisters\":{");
+  if (srIdx >= 0) {
+    // Extract the SR sub-object
+    int srOpen  = json.indexOf('{', srIdx + 17);
+    int srClose = json.indexOf('}', srOpen);
+    if (srOpen >= 0 && srClose > srOpen) {
+      String srJson = json.substring(srOpen, srClose + 1);
+      if (srJson.indexOf("\"enabled\":") >= 0)
+        deviceConfig.shiftRegisters.enabled  = extractJsonBool(srJson, "enabled");
+      int nc = extractJsonInt(srJson, "numChips", -1);
+      if (nc >= 1 && nc <= 16) deviceConfig.shiftRegisters.numChips = (uint8_t)nc;
+      int dp = extractJsonInt(srJson, "dataPin",  -1);
+      if (dp >= 0)  deviceConfig.shiftRegisters.dataPin  = (uint8_t)dp;
+      int cp = extractJsonInt(srJson, "clockPin", -1);
+      if (cp >= 0)  deviceConfig.shiftRegisters.clockPin = (uint8_t)cp;
+      int lp = extractJsonInt(srJson, "loadPin",  -1);
+      if (lp >= 0)  deviceConfig.shiftRegisters.loadPin  = (uint8_t)lp;
+      if (srJson.indexOf("\"inverted\":") >= 0)
+        deviceConfig.shiftRegisters.inverted = extractJsonBool(srJson, "inverted");
+    }
+  }
+
+  // Save to flash
+  if (storage.saveConfig(&deviceConfig)) {
+    // Full re-init: recalculates SR pins, srOffset_, totalButtonCount_
+    buttons.begin(&deviceConfig);
+    axes.setConfig(&deviceConfig);
+    Serial.println("{\"type\":\"status\",\"message\":\"Config saved\",\"success\":true}");
+    Serial.print("SR: enabled=");
+    Serial.print(deviceConfig.shiftRegisters.enabled ? "true" : "false");
+    Serial.print(" chips=");
+    Serial.print(deviceConfig.shiftRegisters.numChips);
+    Serial.print(" buttons=");
+    Serial.println(deviceConfig.shiftRegisters.numChips * 8);
+  } else {
+    Serial.println("{\"type\":\"status\",\"message\":\"Failed to save config\",\"success\":false}");
+  }
 }

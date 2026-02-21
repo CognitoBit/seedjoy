@@ -22,14 +22,14 @@ const uint8_t BLEHIDController::HID_REPORT_MAP[] = {
   0x95, 0x04,        //   Report Count (4)
   0x81, 0x02,        //   Input (Data, Variable, Absolute)
   
-  // 16 Buttons
+  // 64 Buttons (8 bytes; SR-only uses first 56)
   0x05, 0x09,        //   Usage Page (Button)
   0x19, 0x01,        //   Usage Minimum (1)
-  0x29, 0x10,        //   Usage Maximum (16)
+  0x29, 0x40,        //   Usage Maximum (64)
   0x15, 0x00,        //   Logical Minimum (0)
   0x25, 0x01,        //   Logical Maximum (1)
   0x75, 0x01,        //   Report Size (1)
-  0x95, 0x10,        //   Report Count (16)
+  0x95, 0x40,        //   Report Count (64)
   0x81, 0x02,        //   Input (Data, Variable, Absolute)
   
   0xC0               // End Collection
@@ -135,7 +135,7 @@ void BLEHIDController::startAdvertising(BLEService* configService) {
   Bluefruit.Advertising.start(0); // 0 = Don't stop advertising
 }
 
-void BLEHIDController::sendReport(const int16_t axes[MAX_AXES], uint16_t buttonBitmask) {
+void BLEHIDController::sendReport(const int16_t axes[MAX_AXES], const uint8_t buttonBytes[8]) {
   if (!isConnected() || !hidEnabled_) return;
   
   // Populate report
@@ -143,7 +143,7 @@ void BLEHIDController::sendReport(const int16_t axes[MAX_AXES], uint16_t buttonB
   report_.y = axes[1];
   report_.z = axes[2];
   report_.rz = axes[3];
-  report_.buttons = buttonBitmask;
+  memcpy(report_.buttons, buttonBytes, 8);
   
   // Send input report (reportID = 0)
   blehid_.inputReport(0, (uint8_t*)&report_, sizeof(report_));

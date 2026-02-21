@@ -44,8 +44,8 @@ class SeedJoyConfig {
             
             // Shift registers (74HC165)
             shiftRegisters: {
-                enabled: false,
-                numChips: 1,
+                enabled: true,
+                numChips: 7,
                 dataPin: 0x2B,   // D6 / P1.11 (TX) - default data pin
                 clockPin: 0x2C,  // D7 / P1.12 (RX) - default clock pin
                 loadPin: 0x2D,   // D8 / P1.13 (SCK) - default load pin

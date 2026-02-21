@@ -18,6 +18,12 @@ class SeedJoySerial {
     this.onButtonData = null;
     this.onAxisData = null;
     this.onStatusMessage = null;
+
+    // Pending promise handles
+    this.pendingConfigResolve = null;
+    this.pendingWriteResolve  = null;
+    this.pendingWriteReject   = null;
+    this.pendingWriteTimeout  = null;
   }
 
   isSupported() {
@@ -127,6 +133,20 @@ class SeedJoySerial {
       }
     } else if (msg.type === 'status') {
       if (this.onStatusMessage) this.onStatusMessage(msg);
+      // Resolve / reject a pending writeConfig promise
+      if (this.pendingWriteResolve) {
+        clearTimeout(this.pendingWriteTimeout);
+        const resolve = this.pendingWriteResolve;
+        const reject  = this.pendingWriteReject;
+        this.pendingWriteResolve = null;
+        this.pendingWriteReject  = null;
+        this.pendingWriteTimeout = null;
+        if (msg.success) {
+          resolve(msg);
+        } else {
+          reject(new Error(msg.message || 'Write failed'));
+        }
+      }
     } else if (msg.type === 'axes') {
       if (this.onAxisData) this.onAxisData(msg.data);
     } else if (msg.type === 'buttons') {
@@ -162,18 +182,36 @@ class SeedJoySerial {
   }
 
   async writeConfig(config) {
-    await this.sendCommand('write_config', config);
-    
-    // Wait for confirmation
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Write config timeout')), 5000);
-      
-      // Assume success if no error in 1 second
-      setTimeout(() => {
-        clearTimeout(timeout);
-        resolve();
-      }, 1000);
+    return new Promise(async (resolve, reject) => {
+      this.pendingWriteResolve = resolve;
+      this.pendingWriteReject  = reject;
+      this.pendingWriteTimeout = setTimeout(() => {
+        this.pendingWriteResolve = null;
+        this.pendingWriteReject  = null;
+        this.pendingWriteTimeout = null;
+        reject(new Error('Write config timeout'));
+      }, 5000);
+
+      try {
+        await this.sendCommand('write_config', config);
+      } catch (err) {
+        clearTimeout(this.pendingWriteTimeout);
+        this.pendingWriteResolve = null;
+        this.pendingWriteReject  = null;
+        this.pendingWriteTimeout = null;
+        reject(err);
+      }
     });
+  }
+
+  /** Ask firmware to start emitting button states at ~20 Hz (Web Serial button test) */
+  async startButtonStream() {
+    if (this.connected) await this.sendCommand('stream_buttons');
+  }
+
+  /** Stop firmware button state streaming */
+  async stopButtonStream() {
+    if (this.connected) await this.sendCommand('stop_stream');
   }
 
   getDeviceName() {

@@ -57,6 +57,11 @@ private:
   
   // Total button count (GPIO + shift register)
   uint8_t totalButtonCount_;
+
+  // Logical offset for SR buttons:
+  // 0 when no GPIO buttons are enabled (SR-only mode)
+  // MAX_BUTTONS when GPIO buttons are also active
+  uint8_t srOffset_;
   
   // Debounce time in milliseconds
   static const uint32_t DEBOUNCE_MS = 5;

@@ -262,6 +262,56 @@ header p {
     padding: 15px;
 }
 
+#pinout-image {
+    width: 100%;
+    border-radius: 6px;
+    display: block;
+    margin-bottom: 12px;
+    cursor: zoom-in;
+    transition: box-shadow 0.2s;
+}
+
+#pinout-image.zoomed {
+    cursor: zoom-out;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: auto;
+    max-width: 95vw;
+    max-height: 95vh;
+    z-index: 1000;
+    box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.75);
+    border-radius: 8px;
+}
+
+.pinout-legend {
+    font-size: 12px;
+    color: #aaa;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 0 2px;
+}
+
+.legend-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    line-height: 1.4;
+}
+
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.legend-dot.axes  { background: #4CAF50; }
+.legend-dot.sr    { background: #2196F3; }
+.legend-dot.other { background: #FF9800; }
+
 .pin-assignment {
     display: flex;
     flex-direction: column;

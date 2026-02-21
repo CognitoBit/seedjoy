@@ -80,9 +80,70 @@ A0 ────┤ 0.1µF  ├──── GND
        └─────────┘
 ```
 
-## Wiring Buttons
+## Wiring Buttons via Shift Registers (74HC165)
 
-Buttons are wired between digital pins and GND (INPUT_PULLUP mode).
+For SR-only mode (up to 56 buttons with 7 chips), use the 74HC165 parallel-in serial-out IC.
+
+### Single 74HC165 Chip Pinout
+
+```
+74HC165 (SIP-16)
+                 ┌────┬────┐
+    SH/LD (1) ───┤  1  16  ├─── VCC (5V or 3.3V)
+      CLK  (2) ───┤  2  15  ├─── CLK INH (tie to GND)
+        D4  (3) ───┤  3  14  ├─── D3
+        D5  (4) ───┤  4  13  ├─── D2
+        D6  (5) ───┤  5  12  ├─── D1
+        D7  (6) ───┤  6  11  ├─── D0
+       /Q7  (7) ───┤  7  10  ├─── SER (cascade from prev. chip's Q7)
+       GND  (8) ───┤  8   9  ├─── Q7 (serial output → XIAO D6 / next chip SER)
+                 └─────────┘
+```
+
+### Connecting to XIAO nRF52840
+
+| XIAO Pin | 74HC165 Pin | Signal      |
+|----------|------------|-------------|
+| D6 (TX)  | 9  (Q7)    | Serial data (first chip in chain) |
+| D7 (RX)  | 2  (CLK)   | Shift clock (all chips in parallel) |
+| D8 (SCK) | 1  (SH/LD) | Parallel load (all chips in parallel) |
+| 3V3      | 16 (VCC)   | Power       |
+| GND      | 8  (GND)   | Ground      |
+| GND      | 15 (CLK INH)| Tie to GND  |
+
+### Daisy-Chaining 7 Chips (56 Buttons)
+
+Chain chips so each chip's `/Q7` (pin 7) feeds the next chip's `SER` (pin 10).
+
+```
+XIAO                Chip 1          Chip 2          ...   Chip 7
+ D8 ───────────── SH/LD ──────── SH/LD ─────────────── SH/LD
+ D7 ───────────── CLK ─────────── CLK ──────────────── CLK
+ D6 ◄──── Q7(9)   SER(10)←/Q7(7) SER(10)←/Q7(7) ... SER(10)←/Q7(7)
+                (buttons 0-7) (buttons 8-15)       (buttons 48-55)
+```
+
+Each button connects between one of D0–D7 (pins 3–6, 11–14) of its chip and GND.
+The internal pull-up is not available on 74HC165 — add a 10kΩ pull-up resistor per button:
+
+```
+3V3 ─── 10kΩ ─┬─── Button ─── GND
+              └─── Dx (74HC165 input pin)
+```
+
+### Button Numbering
+
+| Logical # | Chip | 74HC165 Input Pin |
+|-----------|------|--------------------|
+| 0–7       | 1    | D0–D7              |
+| 8–15      | 2    | D0–D7              |
+| 16–23     | 3    | D0–D7              |
+| 24–31     | 4    | D0–D7              |
+| 32–39     | 5    | D0–D7              |
+| 40–47     | 6    | D0–D7              |
+| 48–55     | 7    | D0–D7              |
+
+## Wiring Buttons (Direct GPIO)
 
 ### Simple Button
 

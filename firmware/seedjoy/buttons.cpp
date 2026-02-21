@@ -5,7 +5,7 @@
 #include "buttons.h"
 #include <Arduino.h>
 
-ButtonsProcessor::ButtonsProcessor() : config_(nullptr), totalButtonCount_(MAX_BUTTONS) {
+ButtonsProcessor::ButtonsProcessor() : config_(nullptr), totalButtonCount_(MAX_BUTTONS), srOffset_(0) {
   for (int i = 0; i < MAX_TOTAL_BUTTONS; i++) {
     logicalStates_[i] = false;
   }
@@ -28,11 +28,23 @@ void ButtonsProcessor::begin(const DeviceConfig* config) {
   
   // Initialize shift registers if enabled
   shiftRegisters_.begin(&config_->shiftRegisters);
-  
+
+  // Determine SR offset: 0 if no GPIO buttons are enabled (SR-only mode),
+  // MAX_BUTTONS if any GPIO buttons are active (mixed mode)
+  srOffset_ = 0;
+  for (int i = 0; i < MAX_BUTTONS; i++) {
+    if (config_->buttons[i].enabled) {
+      srOffset_ = MAX_BUTTONS;
+      break;
+    }
+  }
+
   // Calculate total button count
-  totalButtonCount_ = MAX_BUTTONS;
   if (config_->shiftRegisters.enabled) {
-    totalButtonCount_ += shiftRegisters_.getButtonCount();
+    totalButtonCount_ = srOffset_ + shiftRegisters_.getButtonCount();
+    if (totalButtonCount_ > MAX_TOTAL_BUTTONS) totalButtonCount_ = MAX_TOTAL_BUTTONS;
+  } else {
+    totalButtonCount_ = MAX_BUTTONS;
   }
   
   Serial.print("Total buttons: ");
@@ -46,6 +58,8 @@ void ButtonsProcessor::begin(const DeviceConfig* config) {
 
 void ButtonsProcessor::setConfig(const DeviceConfig* config) {
   config_ = config;
+  // Propagate to the embedded SR reader so numChips / pins stay in sync
+  shiftRegisters_.setConfig(&config_->shiftRegisters);
 }
 
 void ButtonsProcessor::update() {
@@ -97,10 +111,10 @@ void ButtonsProcessor::update() {
     shiftRegisters_.update();
     
     // Map shift register buttons to logical buttons
-    // Shift register buttons start at logical button MAX_BUTTONS
+    // srOffset_ = 0 in SR-only mode; MAX_BUTTONS when GPIO buttons are also active
     uint8_t srButtonCount = shiftRegisters_.getButtonCount();
     for (uint8_t i = 0; i < srButtonCount; i++) {
-      uint8_t logicalNum = MAX_BUTTONS + i;
+      uint8_t logicalNum = srOffset_ + i;
       if (logicalNum < MAX_TOTAL_BUTTONS) {
         logicalStates_[logicalNum] = shiftRegisters_.getButtonState(i);
       }

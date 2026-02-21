@@ -178,18 +178,17 @@ class SeedJoyBLE {
     return { processed, raw, timestamp };
   }
 
-  // Parse buttons notification: uint16 bitmask, uint32 timestamp
+  // Parse buttons notification: uint8[8] states, uint32 timestamp (12 bytes)
   parseButtonsData(dataView) {
-    // Validate size (should be 6 bytes: uint16 + uint32)
-    if (dataView.byteLength < 6) {
-      console.warn('Button data too small:', dataView.byteLength, 'bytes (expected 6)');
-      return { bitmask: 0, timestamp: 0 };
+    // Validate size (should be 12 bytes: 8 state bytes + uint32 timestamp)
+    if (dataView.byteLength < 12) {
+      console.warn('Button data too small:', dataView.byteLength, 'bytes (expected 12)');
+      return { states: new Uint8Array(8), timestamp: 0 };
     }
-    // Use the dataView directly instead of creating a new one from buffer
-    // (buffer might have offset that we'd lose)
-    const bitmask = dataView.getUint16(0, true);
-    const timestamp = dataView.getUint32(2, true);
-    return { bitmask, timestamp };
+    const states = new Uint8Array(8);
+    for (let i = 0; i < 8; i++) states[i] = dataView.getUint8(i);
+    const timestamp = dataView.getUint32(8, true);
+    return { states, timestamp };
   }
 
   async readConfig() {

@@ -84,9 +84,9 @@ private:
   };
   AxisMonitorData axisData_;
 
-  // Button monitoring data (16-button bitmask + timestamp)
+  // Button monitoring data (8 bytes = 64 buttons + timestamp)
   struct __attribute__((packed)) ButtonsMonitorData {
-    uint16_t bitmask;    // Button bitmask (bit 0..15)
+    uint8_t states[8];   // Button states packed as bits (button 0 = byte 0 bit 0)
     uint32_t timestamp;  // Milliseconds since boot
   };
   ButtonsMonitorData buttonsData_;

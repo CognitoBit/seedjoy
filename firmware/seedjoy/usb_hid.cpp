@@ -22,14 +22,14 @@ const uint8_t USBHIDController::HID_REPORT_DESCRIPTOR[] = {
   0x95, 0x04,        //   Report Count (4 axes)
   0x81, 0x02,        //   Input (Data, Variable, Absolute)
   
-  // 16 Buttons
+  // 64 Buttons (8 bytes; SR-only uses first 56)
   0x05, 0x09,        //   Usage Page (Button)
   0x19, 0x01,        //   Usage Minimum (Button 1)
-  0x29, 0x10,        //   Usage Maximum (Button 16)
+  0x29, 0x40,        //   Usage Maximum (Button 64)
   0x15, 0x00,        //   Logical Minimum (0)
   0x25, 0x01,        //   Logical Maximum (1)
   0x75, 0x01,        //   Report Size (1 bit)
-  0x95, 0x10,        //   Report Count (16 buttons)
+  0x95, 0x40,        //   Report Count (64 buttons)
   0x81, 0x02,        //   Input (Data, Variable, Absolute)
   
   0xC0               // End Collection
@@ -69,7 +69,7 @@ bool USBHIDController::begin(const DeviceConfig* config) {
   return TinyUSBDevice.mounted();
 }
 
-void USBHIDController::sendReport(const int16_t axes[MAX_AXES], uint16_t buttonBitmask) {
+void USBHIDController::sendReport(const int16_t axes[MAX_AXES], const uint8_t buttonBytes[8]) {
   if (!isReady()) return;
   
   // Populate report structure
@@ -77,7 +77,7 @@ void USBHIDController::sendReport(const int16_t axes[MAX_AXES], uint16_t buttonB
   report_.y = axes[1];
   report_.z = axes[2];
   report_.rz = axes[3];
-  report_.buttons = buttonBitmask;
+  memcpy(report_.buttons, buttonBytes, 8);
   
   // Send report (report ID 0)
   usb_hid_.sendReport(0, &report_, sizeof(report_));

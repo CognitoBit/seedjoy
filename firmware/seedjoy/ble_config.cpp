@@ -116,9 +116,9 @@ void BLEConfigService::updateAxisMonitoring() {
     axesMonitorChar_.notify(&axisData_, sizeof(axisData_));
   }
 
-  // Buttons monitoring (notify bitmask)
+  // Buttons monitoring
   if (buttons_ && buttonsMonitorChar_.notifyEnabled()) {
-    buttonsData_.bitmask = buttons_->getButtonBitmask();
+    buttons_->getExtendedButtonStates(buttonsData_.states, 8);
     buttonsData_.timestamp = millis();
     buttonsMonitorChar_.notify(&buttonsData_, sizeof(buttonsData_));
   }
@@ -169,15 +169,25 @@ bool BLEConfigService::serializeConfig() {
   }
   json += "],";
   
-  // Buttons (simplified - just enabled/pin/logical)
-  json += "\"buttons\":[";
+// Shift register config
+  json += "\"shiftRegisters\":{";
+  json += "\"enabled\":"  + String(config_->shiftRegisters.enabled  ? "true" : "false") + ",";
+  json += "\"numChips\":" + String(config_->shiftRegisters.numChips) + ",";
+  json += "\"dataPin\":"  + String(config_->shiftRegisters.dataPin)  + ",";
+  json += "\"clockPin\":" + String(config_->shiftRegisters.clockPin) + ",";
+  json += "\"loadPin\":"  + String(config_->shiftRegisters.loadPin)  + ",";
+  json += "\"inverted\":" + String(config_->shiftRegisters.inverted ? "true" : "false");
+  json += "},";
+
+  // Buttons (GPIO - just enabled/pin/logical)
+  json += "\"buttons\":["; 
   for (int i = 0; i < MAX_BUTTONS; i++) {
     if (i > 0) json += ",";
     json += "{";
-    json += "\"enabled\":" + String(config_->buttons[i].enabled ? "true" : "false") + ",";
-    json += "\"pin\":" + String(config_->buttons[i].pin) + ",";
+    json += "\"enabled\":"      + String(config_->buttons[i].enabled      ? "true" : "false") + ",";
+    json += "\"pin\":"           + String(config_->buttons[i].pin)           + ",";
     json += "\"logicalNumber\":" + String(config_->buttons[i].logicalNumber) + ",";
-    json += "\"inverted\":" + String(config_->buttons[i].inverted ? "true" : "false");
+    json += "\"inverted\":"      + String(config_->buttons[i].inverted      ? "true" : "false");
     json += "}";
   }
   json += "]";
@@ -203,27 +213,105 @@ bool BLEConfigService::serializeConfig() {
   return true;
 }
 
+// ─── JSON helpers (mirrors seedjoy.ino) ─────────────────────────────────────
+static int bleExtractJsonInt(const String& j, const String& key, int dv = 0) {
+  String s = "\"" + key + "\":";
+  int idx = j.indexOf(s);
+  if (idx < 0) return dv;
+  idx += s.length();
+  while (idx < (int)j.length() && j[idx] == ' ') idx++;
+  String n = "";
+  if (idx < (int)j.length() && j[idx] == '-') { n += '-'; idx++; }
+  while (idx < (int)j.length() && isdigit(j[idx])) n += j[idx++];
+  return n.length() ? n.toInt() : dv;
+}
+static bool bleExtractJsonBool(const String& j, const String& key, bool dv = false) {
+  String s = "\"" + key + "\":";
+  int idx = j.indexOf(s);
+  if (idx < 0) return dv;
+  idx += s.length();
+  while (idx < (int)j.length() && j[idx] == ' ') idx++;
+  if (idx + 3 < (int)j.length() && j.substring(idx, idx + 4) == "true")  return true;
+  if (idx + 4 < (int)j.length() && j.substring(idx, idx + 5) == "false") return false;
+  return dv;
+}
+static String bleExtractJsonStr(const String& j, const String& key, const String& dv = "") {
+  String s = "\"" + key + "\":\"";
+  int idx = j.indexOf(s);
+  if (idx < 0) return dv;
+  idx += s.length();
+  int end = j.indexOf('"', idx);
+  return end < 0 ? dv : j.substring(idx, end);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 bool BLEConfigService::deserializeConfig(const uint8_t* data, uint16_t len) {
   if (!config_ || !data || len == 0) return false;
-  
-  // Convert to string for parsing
-  char jsonStr[MAX_CONFIG_SIZE + 1];
+
   if (len > MAX_CONFIG_SIZE) len = MAX_CONFIG_SIZE;
-  memcpy(jsonStr, data, len);
-  jsonStr[len] = '\0';
-  
-  Serial.println("Received config JSON:");
-  Serial.println(jsonStr);
-  
-  // Simple JSON parsing (would be better with ArduinoJson library)
-  // For MVP, we'll do basic string parsing
-  // In production, use a proper JSON library
-  
-  // This is a placeholder - implement proper JSON parsing
-  // For now, just indicate success
-  Serial.println("Config parsing not yet fully implemented");
-  Serial.println("Use ArduinoJson library for production parsing");
-  
+  char buf[MAX_CONFIG_SIZE + 1];
+  memcpy(buf, data, len);
+  buf[len] = '\0';
+  String json = String(buf);
+
+  Serial.print("Deserializing config ("); Serial.print(len); Serial.println(" bytes)");
+
+  // Device name
+  String name = bleExtractJsonStr(json, "deviceName");
+  if (name.length() > 0) {
+    name = name.substring(0, 31);
+    strncpy(config_->deviceName, name.c_str(), sizeof(config_->deviceName) - 1);
+    config_->deviceName[sizeof(config_->deviceName) - 1] = '\0';
+  }
+
+  int modeVal = bleExtractJsonInt(json, "mode", -1);
+  if (modeVal >= 0 && modeVal <= 2) config_->mode = (OperationMode)modeVal;
+
+  int pollRate = bleExtractJsonInt(json, "usbPollRate", -1);
+  if (pollRate > 0) config_->usbPollRate = (uint8_t)pollRate;
+
+  int bleInterval = bleExtractJsonInt(json, "bleConnInterval", -1);
+  if (bleInterval > 0) config_->bleConnInterval = (uint16_t)bleInterval;
+
+  int txPower = bleExtractJsonInt(json, "bleTxPower", -99);
+  if (txPower != -99) config_->bleTxPower = (int8_t)txPower;
+
+  if (json.indexOf("\"autoSleep\":") >= 0)
+    config_->autoSleep = bleExtractJsonBool(json, "autoSleep");
+  int sleepTimeout = bleExtractJsonInt(json, "sleepTimeout", -1);
+  if (sleepTimeout > 0) config_->sleepTimeout = (uint16_t)sleepTimeout;
+
+  // Shift registers
+  int srIdx = json.indexOf("\"shiftRegisters\":{");
+  if (srIdx >= 0) {
+    int srOpen  = json.indexOf('{', srIdx + 17);
+    int srClose = json.indexOf('}', srOpen);
+    if (srOpen >= 0 && srClose > srOpen) {
+      String srJson = json.substring(srOpen, srClose + 1);
+      if (srJson.indexOf("\"enabled\":") >= 0)
+        config_->shiftRegisters.enabled  = bleExtractJsonBool(srJson, "enabled");
+      int nc = bleExtractJsonInt(srJson, "numChips", -1);
+      if (nc >= 1 && nc <= 16) config_->shiftRegisters.numChips = (uint8_t)nc;
+      int dp = bleExtractJsonInt(srJson, "dataPin",  -1);
+      if (dp >= 0) config_->shiftRegisters.dataPin  = (uint8_t)dp;
+      int cp = bleExtractJsonInt(srJson, "clockPin", -1);
+      if (cp >= 0) config_->shiftRegisters.clockPin = (uint8_t)cp;
+      int lp = bleExtractJsonInt(srJson, "loadPin",  -1);
+      if (lp >= 0) config_->shiftRegisters.loadPin  = (uint8_t)lp;
+      if (srJson.indexOf("\"inverted\":") >= 0)
+        config_->shiftRegisters.inverted = bleExtractJsonBool(srJson, "inverted");
+    }
+  }
+
+  // Re-apply to running subsystems (live update without reboot)
+  if (axes_)    axes_->setConfig(config_);
+  if (buttons_) buttons_->setConfig(config_);
+
+  Serial.print("SR: enabled=");
+  Serial.print(config_->shiftRegisters.enabled ? "true" : "false");
+  Serial.print(" chips="); Serial.print(config_->shiftRegisters.numChips);
+  Serial.print(" buttons="); Serial.println(config_->shiftRegisters.numChips * 8);
+
   return true;
 }
 
