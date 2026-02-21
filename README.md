@@ -1,6 +1,291 @@
-# SeedJoy - BLE/USB Game Controller Firmware
+# SeedJoy
 
-A dual-mode (USB/BLE) game controller firmware for Seeed Studio XIAO nRF52840, inspired by FreeJoy.
+A dual-mode (USB HID / BLE HID) game controller firmware for the **Seeed Studio XIAO nRF52840**. Supports up to **56 buttons via 74HC165 shift registers** and **4 analog axes**, configurable through a zero-install web app over either **WebBluetooth** or **Web Serial**.
+
+---
+
+## Features
+
+- **56 buttons** via 7× 74HC165 shift registers (SR-only mode, no GPIO buttons needed)
+- **Up to 64 total buttons** when mixing SR + GPIO inputs
+- **4 analog axes** (12-bit, A0–A3)
+- **Dual transport**: USB HID or BLE HID, selectable at boot
+- **Web configurator**: Chrome/Edge — no install, no server
+  - Connect via **WebBluetooth** (wireless) or **Web Serial** (USB cable)
+  - Read / write full device config (SR settings, axes, buttons, power)
+  - Real-time axis calibration with live preview
+  - Real-time **button test tab** — 56 indicators light up as you press buttons (both BLE and serial)
+- **Persistent config**: LittleFS flash, CRC32-validated
+- **Ghost-input protection**: 60-second config window on BLE connect during which HID is disabled
+- **Battery monitoring**: LiPo voltage → BLE battery service
+
+---
+
+## Hardware
+
+### Required
+
+| Part | Qty | Notes |
+|------|-----|-------|
+| Seeed XIAO nRF52840 | 1 | **Non-Sense** variant |
+| 74HC165 8-bit PISO shift register | 7 | Daisy-chained for 56 buttons |
+| 10 kΩ resistors | 56 | Pull-ups on each button input |
+| Tactile buttons / switches | up to 56 | |
+
+### Optional
+
+| Part | Notes |
+|------|-------|
+| 10 kΩ potentiometers (×4) | Analog axes on A0–A3 |
+| LiPo battery (3.7 V, 100–500 mAh) | Wireless operation |
+
+### Shift Register Wiring (74HC165)
+
+Default pins — configurable in software:
+
+| XIAO Pin | SR Pin | Function |
+|----------|--------|----------|
+| D6 (P1.11) | QH (serial out, last chip) | MISO / data |
+| D7 (P1.12) | CLK | Clock |
+| D8 (P1.13) | SH/LD̄ | Load / latch |
+| 3.3 V | VCC | Power |
+| GND | GND | Ground |
+
+Daisy-chain: QH of chip N → SER (pin 10) of chip N+1. First chip's SER tied to GND (or VCC if `inverted: true`).
+
+Use a 10 kΩ pull-up resistor on each button input pin (Dn) of each 74HC165.
+
+**Button numbering** (SR-only mode):
+- Chip 1, bit 0 → Button 0 (HID button 1)
+- Chip 1, bit 7 → Button 7
+- Chip 2, bit 0 → Button 8
+- …
+- Chip 7, bit 7 → Button 55
+
+### Special / Reserved Pins
+
+| Pin | Function |
+|-----|----------|
+| D9 (P0.12) | Mode select (HIGH = USB, LOW = BLE) |
+| LED\_RED | Status (blinks on boot) |
+| LED\_BLUE | BLE connection indicator |
+| VBAT | Battery voltage sense |
+
+---
+
+## Quick Start
+
+### 1. Install Board Support
+
+In Arduino IDE (2.0+) or Arduino CLI, add the Seeed board manager URL:
+```
+https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
+```
+Install: **Seeed nRF52 Boards** (NOT the mbed-based package).
+
+Select board: **Seeed XIAO nRF52840** (not Sense).
+
+### 2. Flash Firmware
+
+#### Arduino CLI
+```bash
+cd firmware/seedjoy
+chmod +x compile.sh upload.sh
+./compile.sh          # builds into build/
+./upload.sh           # uploads via USB
+```
+
+#### Arduino IDE
+Open `firmware/seedjoy/seedjoy.ino` → Upload.
+
+#### UF2 drag-and-drop
+1. Double-click the RESET button to enter bootloader (drive named `XIAONRF52` appears)
+2. Drag `build/seedjoy.ino.zip` onto the drive
+
+### 3. Wire Shift Registers
+
+Connect D6/D7/D8 as described above and daisy-chain up to 7× 74HC165. The default config has SR enabled with 7 chips, so it works immediately without any configuration step.
+
+### 4. Open Configurator
+
+Open `configurator/index.html` directly in Chrome or Edge (no server needed for Web Serial; WebBluetooth requires HTTPS — use `npx http-server` or `python3 -m http.server` + ngrok/mkcert if needed).
+
+Click **Connect** and choose **Serial** (USB cable) or **Bluetooth** (wireless, BLE mode only).
+
+---
+
+## Web Configurator
+
+### Connection Modes
+
+| Mode | Transport | Firmware mode |
+|------|-----------|--------------|
+| Web Serial | USB cable (115200 baud) | USB or BLE |
+| WebBluetooth | Wireless GATT | BLE only |
+
+### Workflow
+
+1. **Connect** (Serial or Bluetooth)
+2. **Read Config** — downloads all settings from the device into the UI
+3. Edit shift register, axis, and button settings
+4. **Write Config** — saves to device flash; SR hardware re-initialises live (no reboot)
+5. Switch to **Button Mapping** tab — **56 button indicators** update in real time as you press your buttons
+   - Over serial: firmware streams button states at 20 Hz automatically
+   - Over BLE: firmware pushes button state updates via GATT notifications
+
+### Configuration Sections
+
+| Section | Fields |
+|---------|--------|
+| Device | Name, USB/BLE mode |
+| USB/BLE | Poll rate, connection interval, TX power |
+| Power | Auto-sleep, sleep timeout |
+| Shift Registers | Enable, chip count (1–7), data/clock/load pins, invert |
+| Axes (0–3) | Enable, pin, min/center/max cal, deadzone, curve, invert, smoothing |
+| GPIO Buttons (0–15) | Enable, pin, logical number, invert |
+
+### Safety — Ghost Input Protection
+
+On BLE connect, the firmware enters **Configuration Mode** for **60 seconds**:
+- All HID reports are suppressed
+- The BLUE LED is on
+- Serial prints `BLE CONNECTED - Configuration Mode Active`
+
+This prevents floating/unconfigured pins from generating random HID input while you configure the device. HID activates after the 60-second window, or immediately when you send `H` via serial. Hold the D9 MODE button to keep config mode active indefinitely.
+
+> ⚠️ Enable only axes and GPIO buttons that have physical hardware connected. Floating pins read electrical noise and cause phantom inputs.
+
+---
+
+## Serial Protocol
+
+Connect at **115200 baud** (8N1). Commands are newline-terminated text.
+
+| Command | Response | Description |
+|---------|----------|-------------|
+| `ping` | `{"type":"pong"}` | Connection check |
+| `read_config` | `{"type":"config","data":{…}}` | Full device config as JSON |
+| `write_config:{JSON}` | `{"type":"status","success":true/false,"message":"…"}` | Write + save config to flash |
+| `stream_buttons` | `{"type":"buttons","data":{"states":[b0..b7]}}` repeated at 20 Hz | Start button state streaming |
+| `stop_stream` | `{"type":"status","success":true}` | Stop button streaming |
+| `C` | text | Enter config mode (disable HID) |
+| `H` | text | Enable HID mode |
+| `?` | text | Print help |
+
+---
+
+## Architecture
+
+```
+firmware/seedjoy/
+├── seedjoy.ino         Main sketch: setup, loop, mode select, serial commands
+├── config.h            DeviceConfig struct (axes, buttons, SR, BLE, power)
+├── axes.cpp/h          ADC read, calibration, deadzone, curves, smoothing
+├── buttons.cpp/h       GPIO debounce + SR read, logical mapping, 64-bit state
+├── shift_registers.cpp/h  74HC165 SPI-style bit-bang reader
+├── usb_hid.cpp/h       TinyUSB HID descriptor (4 axes, 64 buttons)
+├── ble_hid.cpp/h       Bluefruit BLE HID (same descriptor)
+├── ble_config.cpp/h    GATT config service: read/write/calibrate/monitor
+├── storage.cpp/h       LittleFS config persistence, CRC32 validation
+└── build/              Compile output (gitignored except .zip/.hex)
+
+configurator/
+├── index.html          Single-page UI (tabs: Flashing, Axes, Buttons, Advanced)
+├── app.js              UI logic, tab switching, button/axis rendering
+├── ble.js              WebBluetooth GATT client
+├── serial.js           Web Serial client (stream_buttons, writeConfig w/ status)
+├── calibration.js      Axis calibration manager
+├── config.js           Config model + defaults + validation
+└── styles.css          Styling + pinout image zoom
+```
+
+### HID Report Format
+
+```
+Byte 0–1   Axis 0  (int16, –32768 to 32767)
+Byte 2–3   Axis 1
+Byte 4–5   Axis 2
+Byte 6–7   Axis 3
+Byte 8     Buttons 0–7   (SR chip 1)
+Byte 9     Buttons 8–15  (SR chip 2)
+Byte 10    Buttons 16–23 (SR chip 3)
+Byte 11    Buttons 24–31 (SR chip 4)
+Byte 12    Buttons 32–39 (SR chip 5)
+Byte 13    Buttons 40–47 (SR chip 6)
+Byte 14    Buttons 48–55 (SR chip 7)
+Byte 15    Buttons 56–63 (GPIO / unused)
+```
+
+Total: 16 bytes, descriptor: Usage Page Generic Desktop, Usage Gamepad.
+
+---
+
+## Troubleshooting
+
+**Random HID input after BLE connect**
+The 60-second config window should prevent this. If it still occurs, check that all enabled axes have hardware connected. Disable unused axes/buttons via **Write Config**.
+
+**Shift register buttons not responding**
+- Check D6/D7/D8 wiring and daisy-chain connections
+- Verify pull-up resistors (10 kΩ on each Dn input)
+- In configurator: confirm SR enabled, correct chip count, correct pins → Write Config
+- Serial monitor: boot prints SR diagnostics (chip count, pins, button count)
+
+**Write Config fails / times out**
+- Always **Read Config** first before writing, to avoid overwriting good settings
+- Check serial output for `{"type":"status","success":false,"message":"…"}`
+- If BLE, ensure device is still in config window (send `C` to re-enter)
+
+**Device not found in USB mode**
+- Use a data-capable USB-C cable (not charge-only)
+- On Windows: Device Manager → Update driver → HID-compliant game controller
+
+**Cannot pair in BLE mode**
+- Clear existing Bluetooth pairings for "SeedJoy"
+- Double-tap RESET to reset bond state
+- Ensure D9 is LOW at boot to select BLE mode
+
+**Axes drifting or jittering**
+- Increase deadzone in configurator
+- Calibrate min/center/max with the calibration wizard
+- Add 100 nF capacitor across each potentiometer output to GND
+
+**Config not persisting after reboot**
+- Check serial output for `Configuration saved to flash` or an error message
+- LittleFS requires ~60 KB free in flash; firmware uses < 300 KB
+- Try erasing flash and re-uploading firmware, then reconfigure
+
+---
+
+## Roadmap
+
+- [x] 4 axes, 64-button HID descriptor
+- [x] 74HC165 SR support — 56 buttons (7 chips), SR-only mode
+- [x] USB / BLE dual mode
+- [x] Web Serial + WebBluetooth configurator
+- [x] Full config read/write over serial and BLE (no reboot on SR pin change)
+- [x] Real-time button streaming over serial (20 Hz)
+- [x] Real-time button monitoring over BLE (GATT notify)
+- [x] Axis calibration wizard
+- [x] Ghost-input protection (60 s config window)
+- [x] LittleFS persistent config, CRC32 validation
+- [ ] Firmware update via Web Serial (UF2 drag helper)
+- [ ] Configuration import/export (JSON file)
+- [ ] Rotary encoder support
+- [ ] 8 axes via external ADC (ADS1115)
+- [ ] Button matrices
+- [ ] OTA firmware update via BLE DFU
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE)
+
+## Credits
+
+Inspired by [FreeJoy](https://github.com/FreeJoy-Team/FreeJoy) by Alexandr Yaroshenko.
+
 
 ## Features
 
