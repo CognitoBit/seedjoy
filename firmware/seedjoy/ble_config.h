@@ -75,6 +75,11 @@ private:
   // Data buffers
   uint8_t configBuffer_[MAX_CONFIG_SIZE];
   uint16_t configBufferSize_;
+
+  // Fragmented-write reassembly buffer
+  uint8_t  receiveBuffer_[MAX_CONFIG_SIZE];
+  uint16_t receiveBufferLen_;
+  int16_t  receiveBraceDepth_;
   
   // Axis monitoring data
   struct __attribute__((packed)) AxisMonitorData {

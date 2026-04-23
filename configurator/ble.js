@@ -40,6 +40,11 @@ class SeedJoyBLE {
     this.onBatteryChange = null;
 
     this.connected = false;
+
+    // Pending writeConfig promise — resolved/rejected by status notification
+    this._pendingWriteResolve = null;
+    this._pendingWriteReject  = null;
+    this._pendingWriteTimeout = null;
   }
 
   isSupported() {
@@ -107,6 +112,18 @@ class SeedJoyBLE {
         await this.statusCharacteristic.startNotifications();
         this.statusCharacteristic.addEventListener('characteristicvaluechanged', (ev) => {
           const status = JSON.parse(new TextDecoder().decode(ev.target.value.buffer));
+          // Resolve/reject a pending writeConfig promise if one is waiting
+          if (this._pendingWriteResolve) {
+            clearTimeout(this._pendingWriteTimeout);
+            const resolve = this._pendingWriteResolve;
+            const reject  = this._pendingWriteReject;
+            this._pendingWriteResolve = null;
+            this._pendingWriteReject  = null;
+            this._pendingWriteTimeout = null;
+            if (status.success) resolve(status);
+            else reject(new Error(status.message || 'Write failed'));
+            return;
+          }
           if (this.onStatusMessage) this.onStatusMessage(status);
         });
       }
@@ -199,16 +216,44 @@ class SeedJoyBLE {
 
   async writeConfig(config) {
     if (!this.configWriteCharacteristic) throw new Error('Config write characteristic unavailable');
-    const json = JSON.stringify(config);
-    const enc = new TextEncoder();
-    const buf = enc.encode(json);
+    const buf = new TextEncoder().encode(JSON.stringify(config));
     const MTU = 512;
-    if (buf.byteLength <= MTU) {
-      await this.configWriteCharacteristic.writeValue(buf);
-    } else {
-      await this.writeFragmented(this.configWriteCharacteristic, buf, MTU);
+
+    // If no status characteristic is available, do a best-effort write
+    if (!this.statusCharacteristic) {
+      if (buf.byteLength <= MTU) {
+        await this.configWriteCharacteristic.writeValue(buf);
+      } else {
+        await this.writeFragmented(this.configWriteCharacteristic, buf, MTU);
+      }
+      return true;
     }
-    return true;
+
+    // Wait for firmware to confirm flash save via status notification
+    return new Promise(async (resolve, reject) => {
+      this._pendingWriteResolve = resolve;
+      this._pendingWriteReject  = reject;
+      this._pendingWriteTimeout = setTimeout(() => {
+        this._pendingWriteResolve = null;
+        this._pendingWriteReject  = null;
+        this._pendingWriteTimeout = null;
+        reject(new Error('Write config timeout (no response from device)'));
+      }, 10000);
+
+      try {
+        if (buf.byteLength <= MTU) {
+          await this.configWriteCharacteristic.writeValue(buf);
+        } else {
+          await this.writeFragmented(this.configWriteCharacteristic, buf, MTU);
+        }
+      } catch (err) {
+        clearTimeout(this._pendingWriteTimeout);
+        this._pendingWriteResolve = null;
+        this._pendingWriteReject  = null;
+        this._pendingWriteTimeout = null;
+        reject(err);
+      }
+    });
   }
 
   // Fragmented write helper

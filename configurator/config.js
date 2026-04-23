@@ -234,10 +234,19 @@ class SeedJoyConfig {
      * Calculate CRC32 (simple implementation)
      * In production, should match firmware's CRC calculation
      */
-    calculateCRC32() {
-        // Simplified CRC32 - should match firmware implementation
-        // For MVP, we'll just use a placeholder
-        return 0x12345678;
+    calculateCRC32(str) {
+        // Standard CRC32 (poly 0xEDB88320) over UTF-8 bytes
+        // Note: firmware ignores incoming crc32 on JSON writes and recalculates
+        // over the binary struct, so this is for client-side validation only.
+        let crc = 0xFFFFFFFF;
+        const bytes = new TextEncoder().encode(str);
+        for (let i = 0; i < bytes.length; i++) {
+            crc ^= bytes[i];
+            for (let j = 0; j < 8; j++) {
+                crc = (crc & 1) ? ((crc >>> 1) ^ 0xEDB88320) : (crc >>> 1);
+            }
+        }
+        return (crc ^ 0xFFFFFFFF) >>> 0;
     }
     
     /**

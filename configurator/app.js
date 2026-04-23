@@ -53,6 +53,7 @@ function setupConnectionCallbacks(conn) {
     conn.onConnectionChange = handleConnectionChange;
     conn.onBatteryChange = handleBatteryChange;
     conn.onButtonData = handleButtonData;
+    conn.onStatusMessage = handleStatusMessage;
 }
 
 /**
@@ -170,6 +171,7 @@ function initializePinConfiguration() {
     document.getElementById('enable-all-axes').addEventListener('click', () => {
         for (let i = 0; i < 4; i++) {
             document.getElementById(`axis-enable-${i}`).checked = true;
+            document.getElementById(`axis-pin-${i}`).disabled = false;
             config.updateAxis(i, { enabled: true });
         }
     });
@@ -177,6 +179,7 @@ function initializePinConfiguration() {
     document.getElementById('disable-all-axes').addEventListener('click', () => {
         for (let i = 0; i < 4; i++) {
             document.getElementById(`axis-enable-${i}`).checked = false;
+            document.getElementById(`axis-pin-${i}`).disabled = true;
             config.updateAxis(i, { enabled: false });
         }
     });
@@ -184,6 +187,7 @@ function initializePinConfiguration() {
     document.getElementById('enable-all-buttons').addEventListener('click', () => {
         for (let i = 0; i < 16; i++) {
             document.getElementById(`button-enable-${i}`).checked = true;
+            document.getElementById(`button-pin-${i}`).disabled = false;
             config.updateButton(i, { enabled: true });
         }
     });
@@ -191,6 +195,7 @@ function initializePinConfiguration() {
     document.getElementById('disable-all-buttons').addEventListener('click', () => {
         for (let i = 0; i < 16; i++) {
             document.getElementById(`button-enable-${i}`).checked = false;
+            document.getElementById(`button-pin-${i}`).disabled = true;
             config.updateButton(i, { enabled: false });
         }
     });
@@ -506,7 +511,7 @@ function initializeActionButtons() {
     
     document.getElementById('write-config-btn').addEventListener('click', async () => {
         // Check if config is available (different for BLE vs Serial)
-        if (connectionMode === 'bluetooth' && !ble.configWriteCharacteristic) {
+        if (connectionMode === 'bluetooth' && !activeConnection.configWriteCharacteristic) {
             alert('Configuration service not available.\n\n' +
                   'Please make sure you have uploaded the latest firmware with BLE config service support.');
             return;
@@ -642,6 +647,16 @@ function handleButtonData(data) {
         const pressed = data.states ? ((data.states[byteIndex] >> bitIndex) & 0x1) === 1 : false;
         el.classList.toggle('pressed', pressed);
     }
+}
+
+/**
+ * Handle status messages from device (write confirmation, errors, etc.)
+ */
+function handleStatusMessage(status) {
+    if (!status.success) {
+        showNotification('Device Error', status.message || 'Operation failed', 'error', 5000);
+    }
+    console.log('Device status:', status);
 }
 
 /**

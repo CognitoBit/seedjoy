@@ -79,7 +79,7 @@ Max Size: 512 bytes (may require fragmentation)
 
 #### 2. Status Characteristic (Read, Notify)
 ```
-UUID: e95d0003-251d-470a-a062-fa1922dfa9a8
+UUID: e95d0004-251d-470a-a062-fa1922dfa9a8
 Properties: Read, Notify
 Max Size: 256 bytes
 ```

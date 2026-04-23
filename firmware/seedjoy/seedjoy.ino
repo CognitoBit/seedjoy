@@ -605,7 +605,17 @@ String extractJsonStr(const String& json, const String& key, const String& defau
   return json.substring(idx, end);
 }
 // ─────────────────────────────────────────────────────────────────────────────
-
+float extractJsonFloat(const String& json, const String& key, float defaultVal = 0.0f) {
+  String search = "\"" + key + "\":";
+  int idx = json.indexOf(search);
+  if (idx < 0) return defaultVal;
+  idx += search.length();
+  while (idx < (int)json.length() && json[idx] == ' ') idx++;
+  String num = "";
+  if (idx < (int)json.length() && json[idx] == '-') { num += '-'; idx++; }
+  while (idx < (int)json.length() && (isdigit(json[idx]) || json[idx] == '.')) { num += json[idx++]; }
+  return num.length() ? num.toFloat() : defaultVal;
+}
 void sendConfigAsJSON() {
   Serial.print("{\"type\":\"config\",\"data\":{");
 
@@ -708,6 +718,64 @@ void receiveConfigFromJSON(String json) {
       if (lp >= 0)  deviceConfig.shiftRegisters.loadPin  = (uint8_t)lp;
       if (srJson.indexOf("\"inverted\":") >= 0)
         deviceConfig.shiftRegisters.inverted = extractJsonBool(srJson, "inverted");
+    }
+  }
+
+  // Axes
+  int axesStart = json.indexOf("\"axes\":[");
+  if (axesStart >= 0) {
+    int arrOpen = json.indexOf('[', axesStart + 6);
+    int pos = arrOpen + 1;
+    for (int i = 0; i < MAX_AXES; i++) {
+      int objOpen  = json.indexOf('{', pos);
+      if (objOpen  < 0) break;
+      int objClose = json.indexOf('}', objOpen);
+      if (objClose < 0) break;
+      String axJson = json.substring(objOpen, objClose + 1);
+      if (axJson.indexOf("\"enabled\":") >= 0)
+        deviceConfig.axes[i].enabled = extractJsonBool(axJson, "enabled");
+      int pin = extractJsonInt(axJson, "pin", -1);
+      if (pin >= 0) deviceConfig.axes[i].pin = (uint8_t)pin;
+      int mn = extractJsonInt(axJson, "min", -1);
+      if (mn >= 0) deviceConfig.axes[i].min = (uint16_t)mn;
+      int ctr = extractJsonInt(axJson, "center", -1);
+      if (ctr >= 0) deviceConfig.axes[i].center = (uint16_t)ctr;
+      int mx = extractJsonInt(axJson, "max", -1);
+      if (mx >= 0) deviceConfig.axes[i].max = (uint16_t)mx;
+      int dz = extractJsonInt(axJson, "deadzone", -1);
+      if (dz >= 0) deviceConfig.axes[i].deadzone = (uint8_t)dz;
+      int ct = extractJsonInt(axJson, "curveType", -1);
+      if (ct >= 0 && ct <= 2) deviceConfig.axes[i].curveType = (AxisCurve)ct;
+      float ef = extractJsonFloat(axJson, "expoFactor", -1.0f);
+      if (ef >= 0.0f) deviceConfig.axes[i].expoFactor = ef;
+      if (axJson.indexOf("\"inverted\":") >= 0)
+        deviceConfig.axes[i].inverted = extractJsonBool(axJson, "inverted");
+      int sm = extractJsonInt(axJson, "smoothing", -1);
+      if (sm >= 0) deviceConfig.axes[i].smoothing = (uint8_t)sm;
+      pos = objClose + 1;
+    }
+  }
+
+  // Buttons
+  int btnsStart = json.indexOf("\"buttons\":[");
+  if (btnsStart >= 0) {
+    int arrOpen = json.indexOf('[', btnsStart + 9);
+    int pos = arrOpen + 1;
+    for (int i = 0; i < MAX_BUTTONS; i++) {
+      int objOpen  = json.indexOf('{', pos);
+      if (objOpen  < 0) break;
+      int objClose = json.indexOf('}', objOpen);
+      if (objClose < 0) break;
+      String btnJson = json.substring(objOpen, objClose + 1);
+      if (btnJson.indexOf("\"enabled\":") >= 0)
+        deviceConfig.buttons[i].enabled = extractJsonBool(btnJson, "enabled");
+      int pin = extractJsonInt(btnJson, "pin", -1);
+      if (pin >= 0) deviceConfig.buttons[i].pin = (uint8_t)pin;
+      int ln = extractJsonInt(btnJson, "logicalNumber", -1);
+      if (ln >= 0) deviceConfig.buttons[i].logicalNumber = (uint8_t)ln;
+      if (btnJson.indexOf("\"inverted\":") >= 0)
+        deviceConfig.buttons[i].inverted = extractJsonBool(btnJson, "inverted");
+      pos = objClose + 1;
     }
   }
 

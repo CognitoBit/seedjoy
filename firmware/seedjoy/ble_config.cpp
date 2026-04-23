@@ -20,7 +20,9 @@ BLEConfigService::BLEConfigService()
     storage_(nullptr),
     axes_(nullptr),
     buttons_(nullptr),
-    configBufferSize_(0) {
+    configBufferSize_(0),
+    receiveBufferLen_(0),
+    receiveBraceDepth_(0) {
   
   instance_ = this;
   memset(&axisData_, 0, sizeof(axisData_));
@@ -243,6 +245,17 @@ static String bleExtractJsonStr(const String& j, const String& key, const String
   int end = j.indexOf('"', idx);
   return end < 0 ? dv : j.substring(idx, end);
 }
+static float bleExtractJsonFloat(const String& j, const String& key, float dv = 0.0f) {
+  String s = "\"" + key + \":\"";
+  int idx = j.indexOf(s);
+  if (idx < 0) return dv;
+  idx += s.length();
+  while (idx < (int)j.length() && j[idx] == ' ') idx++;
+  String n = "";
+  if (idx < (int)j.length() && j[idx] == '-') { n += '-'; idx++; }
+  while (idx < (int)j.length() && (isdigit(j[idx]) || j[idx] == '.')) n += j[idx++];
+  return n.length() ? n.toFloat() : dv;
+}
 // ─────────────────────────────────────────────────────────────────────────────
 
 bool BLEConfigService::deserializeConfig(const uint8_t* data, uint16_t len) {
@@ -303,6 +316,64 @@ bool BLEConfigService::deserializeConfig(const uint8_t* data, uint16_t len) {
     }
   }
 
+  // Axes
+  int axesStart = json.indexOf("\"axes\":[");
+  if (axesStart >= 0) {
+    int arrOpen = json.indexOf('[', axesStart + 6);
+    int pos = arrOpen + 1;
+    for (int i = 0; i < MAX_AXES; i++) {
+      int objOpen  = json.indexOf('{', pos);
+      if (objOpen  < 0) break;
+      int objClose = json.indexOf('}', objOpen);
+      if (objClose < 0) break;
+      String axJson = json.substring(objOpen, objClose + 1);
+      if (axJson.indexOf("\"enabled\":") >= 0)
+        config_->axes[i].enabled = bleExtractJsonBool(axJson, "enabled");
+      int pin = bleExtractJsonInt(axJson, "pin", -1);
+      if (pin >= 0) config_->axes[i].pin = (uint8_t)pin;
+      int mn = bleExtractJsonInt(axJson, "min", -1);
+      if (mn >= 0) config_->axes[i].min = (uint16_t)mn;
+      int ctr = bleExtractJsonInt(axJson, "center", -1);
+      if (ctr >= 0) config_->axes[i].center = (uint16_t)ctr;
+      int mx = bleExtractJsonInt(axJson, "max", -1);
+      if (mx >= 0) config_->axes[i].max = (uint16_t)mx;
+      int dz = bleExtractJsonInt(axJson, "deadzone", -1);
+      if (dz >= 0) config_->axes[i].deadzone = (uint8_t)dz;
+      int ct = bleExtractJsonInt(axJson, "curveType", -1);
+      if (ct >= 0 && ct <= 2) config_->axes[i].curveType = (AxisCurve)ct;
+      float ef = bleExtractJsonFloat(axJson, "expoFactor", -1.0f);
+      if (ef >= 0.0f) config_->axes[i].expoFactor = ef;
+      if (axJson.indexOf("\"inverted\":") >= 0)
+        config_->axes[i].inverted = bleExtractJsonBool(axJson, "inverted");
+      int sm = bleExtractJsonInt(axJson, "smoothing", -1);
+      if (sm >= 0) config_->axes[i].smoothing = (uint8_t)sm;
+      pos = objClose + 1;
+    }
+  }
+
+  // Buttons
+  int btnsStart = json.indexOf("\"buttons\":[");
+  if (btnsStart >= 0) {
+    int arrOpen = json.indexOf('[', btnsStart + 9);
+    int pos = arrOpen + 1;
+    for (int i = 0; i < MAX_BUTTONS; i++) {
+      int objOpen  = json.indexOf('{', pos);
+      if (objOpen  < 0) break;
+      int objClose = json.indexOf('}', objOpen);
+      if (objClose < 0) break;
+      String btnJson = json.substring(objOpen, objClose + 1);
+      if (btnJson.indexOf("\"enabled\":") >= 0)
+        config_->buttons[i].enabled = bleExtractJsonBool(btnJson, "enabled");
+      int pin = bleExtractJsonInt(btnJson, "pin", -1);
+      if (pin >= 0) config_->buttons[i].pin = (uint8_t)pin;
+      int ln = bleExtractJsonInt(btnJson, "logicalNumber", -1);
+      if (ln >= 0) config_->buttons[i].logicalNumber = (uint8_t)ln;
+      if (btnJson.indexOf("\"inverted\":") >= 0)
+        config_->buttons[i].inverted = bleExtractJsonBool(btnJson, "inverted");
+      pos = objClose + 1;
+    }
+  }
+
   // Full hardware re-init: recalculates SR pins, srOffset_, totalButtonCount_.
   // Must use begin() not setConfig() — critical when SR pin assignments or
   // numChips changed via BLE write.
@@ -337,17 +408,45 @@ void BLEConfigService::sendStatus(const char* message, bool success) {
 
 void BLEConfigService::configWriteCallback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data, uint16_t len) {
   if (!instance_) return;
-  
-  Serial.print("Config write received: ");
-  Serial.print(len);
+
+  // Accumulate fragments into the receive buffer
+  if (instance_->receiveBufferLen_ + len > MAX_CONFIG_SIZE) {
+    instance_->receiveBufferLen_  = 0;
+    instance_->receiveBraceDepth_ = 0;
+    instance_->sendStatus("Config payload too large", false);
+    Serial.println("ERROR: Config fragment overflowed receive buffer — reset");
+    return;
+  }
+
+  memcpy(instance_->receiveBuffer_ + instance_->receiveBufferLen_, data, len);
+
+  // Track brace depth over the new bytes to detect end of the JSON object
+  for (uint16_t i = instance_->receiveBufferLen_; i < instance_->receiveBufferLen_ + len; i++) {
+    char c = (char)instance_->receiveBuffer_[i];
+    if      (c == '{') instance_->receiveBraceDepth_++;
+    else if (c == '}') instance_->receiveBraceDepth_--;
+  }
+  instance_->receiveBufferLen_ += len;
+
+  Serial.print("Config fragment: ");
+  Serial.print(instance_->receiveBufferLen_);
+  Serial.print(" bytes, brace depth ");
+  Serial.println(instance_->receiveBraceDepth_);
+
+  // Wait until brace depth returns to 0 (complete JSON object received)
+  if (instance_->receiveBraceDepth_ != 0) return;
+
+  uint16_t totalLen = instance_->receiveBufferLen_;
+  instance_->receiveBufferLen_  = 0;
+  instance_->receiveBraceDepth_ = 0;
+
+  Serial.print("Config write complete: ");
+  Serial.print(totalLen);
   Serial.println(" bytes");
-  
-  // Deserialize and apply config
-  if (instance_->deserializeConfig(data, len)) {
-    // Save to flash
+
+  if (instance_->deserializeConfig(instance_->receiveBuffer_, totalLen)) {
     if (instance_->storage_ && instance_->config_) {
       if (instance_->storage_->saveConfig(instance_->config_)) {
-        // Refresh the read characteristic so a subsequent BLE read returns the new values
         instance_->serializeConfig();
         instance_->sendStatus("Configuration saved", true);
         Serial.println("Configuration saved to flash");
