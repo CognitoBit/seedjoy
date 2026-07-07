@@ -144,6 +144,10 @@ void USBHIDController::hidReportCallback(uint8_t report_id, hid_report_type_t re
 #if ENABLE_FFB
 // Host -> device (SET_REPORT / OUT endpoint). Demux the report id and hand off
 // to the FFB runtime.
+// CONTEXT: invoked from tud_task() on the high-priority "usbd" FreeRTOS task —
+// NOT from loop(). It mutates FfbEngine state that updateFFB() reads from the
+// loop task; that race is documented in seedjoy.ino/updateFFB and must be
+// resolved (report queue) before the FFB path is trusted.
 void USBHIDController::ffbSetReportCb(uint8_t report_id, hid_report_type_t report_type,
                                       uint8_t const* buffer, uint16_t bufsize) {
   if (!ffbRuntime_) return;

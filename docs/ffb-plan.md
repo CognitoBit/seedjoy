@@ -28,21 +28,34 @@ on with `-DENABLE_FFB=1` (or edit `ffb_config.h`).
 | Effect engine (constant, ramp, spring, damper, inertia, friction, periodic, envelope, mixing, gain, safety gates) | `ffb_engine.*`, `ffb_types.h` | **Implemented + unit-tested** | `firmware/tests/ffb_engine_test.cpp` — 24 assertions (spring opposes & is proportional, damper opposes velocity, sine frequency, saturation/deadband, duration, mixing clamp, safety gates) |
 | PID report structs + runtime handshake (Create→Block Load→Pool, all Set* parsers, Device Control/Gain, Effect Operation, Block Free, PID State) | `ffb_reports.h`, `ffb_runtime.*` | **Implemented + unit-tested** | `firmware/tests/ffb_runtime_test.cpp` — 17 assertions through raw wire bytes; struct sizes locked with `static_assert` |
 | Phase 1 USB restructure (Report ID 1 joystick, OUT endpoint, GET/SET_REPORT dispatch, bumped PID) | `usb_hid.*` | **Implemented, compiles** | both gate states build; **not** host-tested |
-| Phase 3 driver (1 kHz tick, USB-detach safety cutoff) | `seedjoy.ino` | **Implemented, compiles** | loop-based tick (not yet a hardware-timer ISR — see Phase 3) |
+| Phase 3 driver (1 kHz tick, USB-detach safety cutoff) | `seedjoy.ino` | **Implemented, compiles — has a known data race** | loop-based tick; see the concurrency risk below (not yet a hardware-timer ISR either) |
 | Phase 2 **PID report descriptor** | `ffb_reports.cpp` | **Written, NOT VALIDATED** | spec-structured, sizes checked; **not** parsed by a HID decoder or accepted by any host |
 | Phase 4 motor output | `ffb_motor.*` | **Scaffold only** | no driver pins assigned; axis-0 force mirrored to the status LED for bench viz |
 
 **What is genuinely verified:** the effect math and the report/handshake logic (the two pieces that
 *can* be checked without hardware). **What is not:** that a host accepts the descriptor, that the
-GET/SET_REPORT wiring behaves on real USB, and anything involving a motor. The single biggest risk
-remains the descriptor (see Risks #1–2) — do **not** treat "compiles" as "works."
+GET/SET_REPORT wiring behaves on real USB, thread-safety of the engine, and anything involving a
+motor. Two things must be fixed before the ON path is trustworthy — do **not** treat "compiles" as
+"works":
+
+1. **The descriptor** (Risks #1–2) — unvalidated ~200-byte PID report map.
+2. **A data race in the force loop.** On this core, USB report callbacks run in the high-priority
+   FreeRTOS `usbd` task (verified: `tud_task()` loops there), while `updateFFB()` reads the same
+   engine state from the low-priority `loop` task. `usbd` can preempt `loop()` mid-read and tear an
+   effect's fields. Worst case today is one bad (clamped, LED-only) force sample, but it is a live
+   race **now**, not a future-ISR concern. Fix: single-writer discipline — USB callbacks enqueue
+   raw report bytes into a ring buffer that only the tick drains, so the engine is mutated from one
+   context. (Chosen over locking because a per-tick critical section around the effect mix would
+   block USB.)
 
 **Immediate next steps to close the gap (no motor needed):**
-1. Parse `FFB_HID_REPORT_DESCRIPTOR` with a HID descriptor decoder; fix any usage/size errors.
-2. Flash with `ENABLE_FFB=1`, plug into Linux, run `fftest` — confirm effects upload; watch the
+1. Fix the force-loop data race (report-byte queue drained by the tick) — it's a code change,
+   testable in isolation, and gates trusting any on-hardware force behavior.
+2. Parse `FFB_HID_REPORT_DESCRIPTOR` with a HID descriptor decoder; fix any usage/size errors.
+3. Flash with `ENABLE_FFB=1`, plug into Linux, run `fftest` — confirm effects upload; watch the
    Create→Block Load handshake in `usbmon`.
-3. Verify the joystick half still enumerates (`jstest`) with the new Report ID 1.
-4. Only then move to Windows (`fedit`) and, separately, wire a motor (Phase 4).
+4. Verify the joystick half still enumerates (`jstest`) with the new Report ID 1.
+5. Only then move to Windows (`fedit`) and, separately, wire a motor (Phase 4).
 
 ---
 
@@ -169,6 +182,10 @@ DirectInput-based) produces believable forces.
 4. **Actuator choice drives everything mechanical** (gearing, torque, back-drivability). The plan
    above is actuator-agnostic through Phase 3, which is deliberate — hardware can be selected in
    parallel.
+5. **Engine thread-safety (implemented but racy).** USB report callbacks mutate engine state from
+   the high-priority `usbd` FreeRTOS task; the force tick reads it from `loop`. This is a live data
+   race in the current ON path. Resolve with a single-writer report queue before trusting any
+   on-device force behavior (details in the status section above).
 
 ## Suggested order of work
 

@@ -364,10 +364,17 @@ void updateInputs() {
 }
 
 #if ENABLE_FFB
-// Force-feedback tick. Runs at ~1 kHz off the main loop (a millis() gate). The
-// engine is a pure function of (position, effects); promoting this to a
-// hardware-timer ISR is a Phase 3 hardening step and needs care around the USB
-// callbacks that mutate engine state — keep this thin so that move is easy.
+// Force-feedback tick. Runs at ~1 kHz off the main loop (a millis() gate).
+//
+// KNOWN DATA RACE (must fix before the ON path is trusted — see docs/ffb-plan.md):
+// On this core, USB report callbacks (ffbSetReportCb -> FfbRuntime -> engine
+// mutations) run in the high-priority FreeRTOS "usbd" task, while this tick
+// reads engine state from the low-priority "loop" task. usbd can preempt loop()
+// mid-read, so an effect's fields can be torn. Worst case today is one bad force
+// sample (clamped, LED-only), but this is a real race NOW, not just after the
+// hardware-timer promotion. The correct fix is single-writer discipline: have
+// the USB callbacks enqueue raw report bytes into a ring buffer that ONLY this
+// tick drains, so the engine is mutated from one context. Not yet done.
 void updateFFB() {
   uint32_t now = millis();
   if (now - lastFfbTick < 1) return;   // ~1 kHz cap
