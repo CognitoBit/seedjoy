@@ -25,4 +25,11 @@
 #define FFB_USB_PID 0x80F5
 #endif
 
+// Global hard clamp on |force| output per axis (0.0..1.0). A safety ceiling
+// independent of host "Device Gain" — start conservative when bringing up real
+// actuators and raise once the mechanism is characterized.
+#ifndef FFB_MAX_DUTY
+#define FFB_MAX_DUTY 1.0f
+#endif
+
 #endif // FFB_CONFIG_H

@@ -7,6 +7,7 @@
 #if ENABLE_FFB
 #include "ffb_reports.h"
 #include "ffb_runtime.h"
+#include "ffb_lock.h"
 FfbRuntime* USBHIDController::ffbRuntime_ = nullptr;
 #endif
 
@@ -161,9 +162,13 @@ void USBHIDController::ffbSetReportCb(uint8_t report_id, hid_report_type_t repor
       buffer++;
       bufsize--;
     }
+    ffbLock();
     ffbRuntime_->handleOutputReport(report_id, buffer, bufsize, now);
+    ffbUnlock();
   } else if (report_type == HID_REPORT_TYPE_FEATURE) {
+    ffbLock();
     ffbRuntime_->handleSetFeature(report_id, buffer, bufsize);
+    ffbUnlock();
   }
 }
 
@@ -172,12 +177,16 @@ void USBHIDController::ffbSetReportCb(uint8_t report_id, hid_report_type_t repor
 uint16_t USBHIDController::ffbGetReportCb(uint8_t report_id, hid_report_type_t report_type,
                                          uint8_t* buffer, uint16_t reqlen) {
   if (!ffbRuntime_) return 0;
+  uint16_t n = 0;
   if (report_type == HID_REPORT_TYPE_FEATURE) {
-    return ffbRuntime_->handleGetFeature(report_id, buffer, reqlen);
+    ffbLock();
+    n = ffbRuntime_->handleGetFeature(report_id, buffer, reqlen);
+    ffbUnlock();
+  } else if (report_type == HID_REPORT_TYPE_INPUT && report_id == PID_RID_STATE) {
+    ffbLock();
+    n = ffbRuntime_->buildStateReport(buffer, reqlen);
+    ffbUnlock();
   }
-  if (report_type == HID_REPORT_TYPE_INPUT && report_id == PID_RID_STATE) {
-    return ffbRuntime_->buildStateReport(buffer, reqlen);
-  }
-  return 0;
+  return n;
 }
 #endif // ENABLE_FFB

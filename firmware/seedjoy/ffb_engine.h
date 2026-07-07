@@ -33,7 +33,8 @@ public:
   void setEffectCommon(uint8_t index, uint8_t type, uint32_t duration_ms,
                        float gain, uint8_t axisMask, const float* dirScale);
   void setEnvelope(uint8_t index, const FfbEnvelope& env);
-  void setCondition(uint8_t index, const FfbConditionParams& cond);
+  // axis = PID parameterBlockOffset (which axis's condition block this is).
+  void setCondition(uint8_t index, uint8_t axis, const FfbConditionParams& cond);
   void setPeriodic(uint8_t index, float magnitude, float offset,
                    float phase, uint32_t period_ms);
   void setConstantForce(uint8_t index, float magnitude);
@@ -43,7 +44,8 @@ public:
   void startEffect(uint8_t index, uint8_t loopCount, uint32_t now_ms);
   void stopEffect(uint8_t index);
   void stopAll();
-  void setDeviceGain(float gain);        // 0..1
+  void setDeviceGain(float gain);        // 0..1, host "Device Gain"
+  void setMaxOutput(float maxAbs);       // 0..1, hard per-axis output clamp (safety)
   void setActuatorsEnabled(bool enabled);
   void setPaused(bool paused);
 
@@ -58,6 +60,7 @@ public:
   bool    actuatorsEnabled() const { return actuatorsEnabled_; }
   bool    paused() const           { return paused_; }
   uint8_t playingCount() const;
+  uint8_t firstPlaying() const;    // lowest playing block index (1-based), 0 if none
 
   // Exposed for the host test / diagnostics.
   const FfbEffect& effect(uint8_t index) const;
@@ -66,6 +69,7 @@ private:
   FfbEffect effects_[MAX_FFB_EFFECTS];
 
   float   deviceGain_;
+  float   maxOutput_;        // hard safety clamp on |force| per axis
   bool    actuatorsEnabled_;
   bool    paused_;
 

@@ -30,6 +30,7 @@
 #if ENABLE_FFB
 #include "ffb_runtime.h"
 #include "ffb_motor.h"
+#include "ffb_lock.h"
 #endif
 
 // Global objects
@@ -137,8 +138,10 @@ void setup() {
   if (currentMode == MODE_USB) {
     Serial.println("Starting USB HID...");
 #if ENABLE_FFB
-    // Register the FFB runtime before begin() so PID reports route as soon as
-    // the host enumerates.
+    // Create the FFB mutex and register the runtime BEFORE begin(), so the lock
+    // exists before the usbd task can fire a report callback.
+    ffbLockInit();
+    ffbRuntime.engine().setMaxOutput(FFB_MAX_DUTY);   // global safety clamp
     usbHID.setFfbRuntime(&ffbRuntime);
 #endif
     if (usbHID.begin(&deviceConfig)) {
@@ -366,15 +369,12 @@ void updateInputs() {
 #if ENABLE_FFB
 // Force-feedback tick. Runs at ~1 kHz off the main loop (a millis() gate).
 //
-// KNOWN DATA RACE (must fix before the ON path is trusted — see docs/ffb-plan.md):
-// On this core, USB report callbacks (ffbSetReportCb -> FfbRuntime -> engine
-// mutations) run in the high-priority FreeRTOS "usbd" task, while this tick
-// reads engine state from the low-priority "loop" task. usbd can preempt loop()
-// mid-read, so an effect's fields can be torn. Worst case today is one bad force
-// sample (clamped, LED-only), but this is a real race NOW, not just after the
-// hardware-timer promotion. The correct fix is single-writer discipline: have
-// the USB callbacks enqueue raw report bytes into a ring buffer that ONLY this
-// tick drains, so the engine is mutated from one context. Not yet done.
+// CONCURRENCY: USB report callbacks mutate engine state from the high-priority
+// "usbd" task; this tick reads/steps it from the low-priority "loop" task. The
+// ffbLock() mutex serializes them (see ffb_lock.h). We hold the lock ONLY across
+// engine().update() — pure math, no blocking/USB calls — so the priority
+// inversion is bounded and deadlock is impossible. Reading axis positions and
+// writing the motor happen outside the lock (loop-owned state).
 void updateFFB() {
   uint32_t now = millis();
   if (now - lastFfbTick < 1) return;   // ~1 kHz cap
@@ -394,7 +394,9 @@ void updateFFB() {
   }
 
   float force[MAX_FFB_AXES];
+  ffbLock();
   ffbRuntime.engine().update(now, pos, force, n);
+  ffbUnlock();
 
   for (uint8_t i = 0; i < n; i++) {
     ffbMotor.setForce(i, force[i]);

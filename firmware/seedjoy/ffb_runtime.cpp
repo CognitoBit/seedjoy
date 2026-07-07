@@ -7,6 +7,7 @@
 #include "ffb_runtime.h"
 
 #include <string.h>
+#include <math.h>
 
 static inline float clampf(float v, float lo, float hi) {
   return v < lo ? lo : (v > hi ? hi : v);
@@ -28,9 +29,25 @@ void FfbRuntime::handleOutputReport(uint8_t reportId, const uint8_t* data,
       uint32_t dur = (r.duration == PID_DURATION_INFINITE) ? 0 : r.duration;
       float gain = r.gain / PID_SCALE_GAIN;
       uint8_t mask = r.enableAxes ? r.enableAxes : 0x01;
-      // NOTE: polar direction vector (directionX/Y) is simplified to +1 per
-      // enabled axis; force sign comes from magnitude. Refine in Phase 4.
-      engine_.setEffectCommon(r.effectBlockIndex, r.effectType, dur, gain, mask, nullptr);
+
+      // Direction -> per-axis signed weight. directionX is a polar angle
+      // (0..255 => 0..360deg): the first enabled axis gets cos(theta), the
+      // second sin(theta). For a single axis this yields the correct sign
+      // (0deg=+1, 180deg=-1). Only non-condition effects use these weights (the
+      // engine ignores direction for conditions). The polar mapping and the
+      // overall motor sign are a physical-rig tuning item — see docs/ffb-plan.md.
+      float theta = (r.directionX / 256.0f) * 6.28318530718f;
+      float dir[MAX_FFB_AXES];
+      int seen = 0;
+      for (int a = 0; a < MAX_FFB_AXES; a++) {
+        if (mask & (1 << a)) {
+          dir[a] = (seen == 0) ? cosf(theta) : (seen == 1) ? sinf(theta) : 1.0f;
+          seen++;
+        } else {
+          dir[a] = 0.0f;
+        }
+      }
+      engine_.setEffectCommon(r.effectBlockIndex, r.effectType, dur, gain, mask, dir);
       break;
     }
     case PID_RID_SET_ENVELOPE: {
@@ -48,8 +65,6 @@ void FfbRuntime::handleOutputReport(uint8_t reportId, const uint8_t* data,
     case PID_RID_SET_CONDITION: {
       if (len < sizeof(PidSetCondition)) return;
       PidSetCondition r; memcpy(&r, data, sizeof(r));
-      // NOTE: per-axis condition blocks (parameterBlockOffset) are collapsed to
-      // one shared condition. Multi-axis conditions are a Phase 4 refinement.
       FfbConditionParams c;
       c.cpOffset = normS(r.cpOffset);
       c.posCoeff = normS(r.positiveCoefficient);
@@ -57,7 +72,8 @@ void FfbRuntime::handleOutputReport(uint8_t reportId, const uint8_t* data,
       c.posSat = normU(r.positiveSaturation);
       c.negSat = normU(r.negativeSaturation);
       c.deadBand = normU(r.deadBand);
-      engine_.setCondition(r.effectBlockIndex, c);
+      // parameterBlockOffset selects which axis's condition block this is.
+      engine_.setCondition(r.effectBlockIndex, r.parameterBlockOffset, c);
       break;
     }
     case PID_RID_SET_PERIODIC: {
@@ -157,10 +173,12 @@ uint16_t FfbRuntime::handleGetFeature(uint8_t reportId, uint8_t* buffer, uint16_
 
 uint16_t FfbRuntime::buildStateReport(uint8_t* buffer, uint16_t maxlen) {
   if (maxlen < sizeof(PidState)) return 0;
+  uint8_t playing = engine_.firstPlaying();
   PidState s;
   s.status = (uint8_t)((engine_.paused() ? 0x01 : 0x00) |
-                       (engine_.actuatorsEnabled() ? 0x02 : 0x00));
-  s.effectBlockIndex = 0;   // not tracking a single "playing" index yet
+                       (engine_.actuatorsEnabled() ? 0x02 : 0x00) |
+                       (playing ? 0x04 : 0x00));   // bit2 = an effect is playing
+  s.effectBlockIndex = playing;                    // 0 = none
   memcpy(buffer, &s, sizeof(s));
   return sizeof(s);
 }

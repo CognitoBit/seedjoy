@@ -85,6 +85,19 @@ int main() {
   PidState st; memcpy(&st, sbuf, sizeof(st));
   check((st.status & 0x02) != 0, "state: actuators-enabled bit set");
 
+  printf("direction sign (single axis)\n");
+  // Re-point the same block: direction 128 = 180deg => dir = cos(pi) = -1, so a
+  // positive constant magnitude should now produce negative force.
+  se.directionX = 128;
+  out(rt, PID_RID_SET_EFFECT, se, 10);
+  dg.gain = 255; out(rt, PID_RID_DEVICE_GAIN, dg, 10);   // restore full gain
+  rt.engine().update(11, pos, f, 1);
+  approx(f[0], -0.5f, 5e-3f, "direction 180deg flips constant force sign");
+  se.directionX = 0;
+  out(rt, PID_RID_SET_EFFECT, se, 12);
+  rt.engine().update(13, pos, f, 1);
+  approx(f[0], 0.5f, 5e-3f, "direction 0deg keeps positive sign");
+
   printf("pause gate + block free\n");
   dc.control = PID_DC_PAUSE; out(rt, PID_RID_DEVICE_CONTROL, dc, 8);
   rt.engine().update(8, pos, f, 1);

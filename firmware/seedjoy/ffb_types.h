@@ -52,6 +52,8 @@ struct FfbEnvelope {
 // Condition parameters (spring/damper/inertia/friction). All normalized.
 // The engine treats a positive coefficient as *resistive* (a spring with
 // posCoeff>0 centers the axis) — see ffb_engine.cpp for the sign convention.
+// POD (kept memset-safe; the engine zero-inits blocks and sets saturation
+// defaults explicitly in createEffect).
 struct FfbConditionParams {
   float cpOffset;   // -1..1, center point offset
   float posCoeff;   // 0..1 per unit displacement, positive side
@@ -90,8 +92,9 @@ struct FfbEffect {
   float    phase;             // 0..1 (turns)
   uint32_t period_ms;
 
-  // Condition
-  FfbConditionParams cond;
+  // Condition — one parameter block per axis (PID parameterBlockOffset). Spring/
+  // damper/etc. can have distinct coefficients per axis.
+  FfbConditionParams cond[MAX_FFB_AXES];
 
   // Envelope
   FfbEnvelope env;

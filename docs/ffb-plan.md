@@ -16,46 +16,43 @@
 
 ---
 
-## Implementation status (2026-07-07)
+## Implementation status (2026-07-08)
 
-An initial implementation of Phases 1–3 (plus a Phase 4 scaffold) is committed, gated behind
-`ENABLE_FFB` (default **0**). **With the gate off, the built firmware is byte-identical to the
-non-FFB baseline** — verified by diffing the compiled flash image against commit `8cd31f9`. Turn it
-on with `-DENABLE_FFB=1` (or edit `ffb_config.h`).
+Phases 1–3 are implemented to **production-grade code** plus a working Phase 4 motor abstraction,
+gated behind `ENABLE_FFB` (default **0**). **With the gate off, the built firmware is byte-identical
+to the non-FFB baseline** — re-verified after all production changes by diffing the compiled flash
+image against commit `8cd31f9`. Turn it on with `-DENABLE_FFB=1` (or edit `ffb_config.h`).
+
+The one thing that *cannot* be verified without hardware is the USB PID descriptor's acceptance by a
+real host; everything host-verifiable is covered by 67 unit assertions (`firmware/tests/run_tests.sh`).
 
 | Piece | Files | Status | How verified |
 |-------|-------|--------|--------------|
-| Effect engine (constant, ramp, spring, damper, inertia, friction, periodic, envelope, mixing, gain, safety gates) | `ffb_engine.*`, `ffb_types.h` | **Implemented + unit-tested** | `firmware/tests/ffb_engine_test.cpp` — 24 assertions (spring opposes & is proportional, damper opposes velocity, sine frequency, saturation/deadband, duration, mixing clamp, safety gates) |
-| PID report structs + runtime handshake (Create→Block Load→Pool, all Set* parsers, Device Control/Gain, Effect Operation, Block Free, PID State) | `ffb_reports.h`, `ffb_runtime.*` | **Implemented + unit-tested** | `firmware/tests/ffb_runtime_test.cpp` — 17 assertions through raw wire bytes; struct sizes locked with `static_assert` |
-| Phase 1 USB restructure (Report ID 1 joystick, OUT endpoint, GET/SET_REPORT dispatch, bumped PID) | `usb_hid.*` | **Implemented, compiles** | both gate states build; **not** host-tested |
-| Phase 3 driver (1 kHz tick, USB-detach safety cutoff) | `seedjoy.ino` | **Implemented, compiles — has a known data race** | loop-based tick; see the concurrency risk below (not yet a hardware-timer ISR either) |
-| Phase 2 **PID report descriptor** | `ffb_reports.cpp` | **Written, NOT VALIDATED** | spec-structured, sizes checked; **not** parsed by a HID decoder or accepted by any host |
-| Phase 4 motor output | `ffb_motor.*` | **Scaffold only** | no driver pins assigned; axis-0 force mirrored to the status LED for bench viz |
+| Effect engine — constant, ramp, spring, damper, inertia, friction, periodic, envelope, **per-axis conditions**, **loop count**, mixing, device gain, **hard safety clamp** | `ffb_engine.*`, `ffb_types.h` | **Production, unit-tested** | `ffb_engine_test.cpp` — 31 assertions |
+| PID runtime — Create→Block Load→Pool handshake, all `Set*` parsers, **per-axis conditions**, **polar direction**, Device Control/Gain, Effect Operation, Block Free, PID State (playing index) | `ffb_reports.h`, `ffb_runtime.*` | **Production, unit-tested** | `ffb_runtime_test.cpp` — 19 assertions (raw wire bytes) |
+| PID report **descriptor** | `ffb_reports.cpp` | **Structurally validated, host-acceptance UNVERIFIED** | `ffb_descriptor_test.cpp` — 17 assertions: collections balance, every report's size matches its struct. Still **not** proven against a real HID stack. |
+| Concurrency — engine access serialized across the `usbd` and `loop` tasks | `ffb_lock.*`, `usb_hid.cpp`, `seedjoy.ino` | **Fixed (FreeRTOS mutex)** | compiles; needs the on-hardware stress test (physical plan §7) |
+| Phase 1 USB restructure — Report ID 1 joystick, OUT endpoint, GET/SET_REPORT dispatch, bumped PID | `usb_hid.*` | **Implemented, compiles** | both gate states build; **not** host-tested |
+| Phase 3 driver — ~1 kHz tick, mutex-guarded engine step, USB-detach safety cutoff | `seedjoy.ino` | **Implemented, compiles** | loop-based (a hardware-timer ISR is a future refinement, not required) |
+| Phase 4 motor output — driver-type-aware (PWM+DIR / dual-PWM), global duty clamp, LED viz | `ffb_motor.*` | **Abstraction ready, NO pins assigned** | no actuator wired; axis-0 force mirrored to status LED |
 
-**What is genuinely verified:** the effect math and the report/handshake logic (the two pieces that
-*can* be checked without hardware). **What is not:** that a host accepts the descriptor, that the
-GET/SET_REPORT wiring behaves on real USB, thread-safety of the engine, and anything involving a
-motor. Two things must be fixed before the ON path is trustworthy — do **not** treat "compiles" as
-"works":
+**Concurrency fix (resolved).** USB report callbacks run in the high-priority FreeRTOS `usbd` task
+(verified: `tud_task()` loops there — `Adafruit_TinyUSB_nrf.cpp`); the force tick runs in the
+low-priority `loop` task. Both touch engine state, so a single mutex (`ffb_lock`) serializes them.
+A mutex — not the report queue floated earlier — is correct because the Create→Block Load handshake
+is a synchronous control transfer that must be serviced in the usbd task; a queue would defer Create
+and make Block Load read stale state. The loop holds the lock only across the pure-math engine step,
+so priority inversion is bounded and deadlock impossible.
 
-1. **The descriptor** (Risks #1–2) — unvalidated ~200-byte PID report map.
-2. **A data race in the force loop.** On this core, USB report callbacks run in the high-priority
-   FreeRTOS `usbd` task (verified: `tud_task()` loops there), while `updateFFB()` reads the same
-   engine state from the low-priority `loop` task. `usbd` can preempt `loop()` mid-read and tear an
-   effect's fields. Worst case today is one bad (clamped, LED-only) force sample, but it is a live
-   race **now**, not a future-ISR concern. Fix: single-writer discipline — USB callbacks enqueue
-   raw report bytes into a ring buffer that only the tick drains, so the engine is mutated from one
-   context. (Chosen over locking because a per-tick critical section around the effect mix would
-   block USB.)
+**The one remaining unknown is the descriptor's host acceptance** — that is what the physical test
+plan exists to close. Do **not** treat "compiles + unit tests pass" as "a host drives it."
 
-**Immediate next steps to close the gap (no motor needed):**
-1. Fix the force-loop data race (report-byte queue drained by the tick) — it's a code change,
-   testable in isolation, and gates trusting any on-hardware force behavior.
-2. Parse `FFB_HID_REPORT_DESCRIPTOR` with a HID descriptor decoder; fix any usage/size errors.
-3. Flash with `ENABLE_FFB=1`, plug into Linux, run `fftest` — confirm effects upload; watch the
+**Immediate next steps (no motor needed — see `docs/ffb-physical-tests.md`):**
+1. Parse `FFB_HID_REPORT_DESCRIPTOR` with a HID decoder; enumerate on Linux, run `fftest`; watch the
    Create→Block Load handshake in `usbmon`.
-4. Verify the joystick half still enumerates (`jstest`) with the new Report ID 1.
-5. Only then move to Windows (`fedit`) and, separately, wire a motor (Phase 4).
+2. Confirm the joystick half still enumerates (`jstest`) with the new Report ID 1.
+3. Stress the concurrency fix (hammer effect uploads while the force loop runs).
+4. Then Windows (`fedit`) and, separately, wire a motor (assign pins in `ffb_motor.cpp::begin`).
 
 ---
 
@@ -182,10 +179,11 @@ DirectInput-based) produces believable forces.
 4. **Actuator choice drives everything mechanical** (gearing, torque, back-drivability). The plan
    above is actuator-agnostic through Phase 3, which is deliberate — hardware can be selected in
    parallel.
-5. **Engine thread-safety (implemented but racy).** USB report callbacks mutate engine state from
-   the high-priority `usbd` FreeRTOS task; the force tick reads it from `loop`. This is a live data
-   race in the current ON path. Resolve with a single-writer report queue before trusting any
-   on-device force behavior (details in the status section above).
+5. **Engine thread-safety — RESOLVED (mutex).** USB report callbacks mutate engine state from the
+   high-priority `usbd` task; the force tick reads it from `loop`. Serialized with a single
+   priority-inheriting FreeRTOS mutex (`ffb_lock`); the loop holds it only across the pure-math
+   engine step. Correct by construction, but confirm on hardware with the concurrency stress test
+   (physical plan §7) — that's the one thing a host test can't exercise.
 
 ## Suggested order of work
 

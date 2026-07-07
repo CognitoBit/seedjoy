@@ -19,4 +19,9 @@ $CXX $FLAGS ffb_runtime_test.cpp ../seedjoy/ffb_runtime.cpp ../seedjoy/ffb_engin
 /tmp/ffb_runtime_test
 
 echo
+echo "== FFB descriptor validator =="
+$CXX $FLAGS ffb_descriptor_test.cpp ../seedjoy/ffb_reports.cpp -o /tmp/ffb_descriptor_test
+/tmp/ffb_descriptor_test
+
+echo
 echo "All host tests passed."

@@ -28,6 +28,7 @@ FfbEngine::FfbEngine() {
 void FfbEngine::reset() {
   memset(effects_, 0, sizeof(effects_));
   deviceGain_ = 1.0f;
+  maxOutput_ = 1.0f;
   actuatorsEnabled_ = false;
   paused_ = false;
   lastUpdateMs_ = 0;
@@ -54,6 +55,12 @@ uint8_t FfbEngine::createEffect(uint8_t effectType) {
       e.gain = 1.0f;
       e.axisMask = 0x01;          // default: axis 0
       e.dirScale[0] = 1.0f;
+      // Safe condition defaults: full saturation headroom so a partially-
+      // configured condition can't clamp everything to zero unexpectedly.
+      for (int a = 0; a < MAX_FFB_AXES; a++) {
+        e.cond[a].posSat = 1.0f;
+        e.cond[a].negSat = 1.0f;
+      }
       return i + 1;               // 1-based
     }
   }
@@ -101,9 +108,9 @@ void FfbEngine::setEnvelope(uint8_t index, const FfbEnvelope& env) {
   effects_[index - 1].env = env;
 }
 
-void FfbEngine::setCondition(uint8_t index, const FfbConditionParams& cond) {
-  if (!indexValid(index)) return;
-  effects_[index - 1].cond = cond;
+void FfbEngine::setCondition(uint8_t index, uint8_t axis, const FfbConditionParams& cond) {
+  if (!indexValid(index) || axis >= MAX_FFB_AXES) return;
+  effects_[index - 1].cond[axis] = cond;
 }
 
 void FfbEngine::setPeriodic(uint8_t index, float magnitude, float offset,
@@ -147,6 +154,7 @@ void FfbEngine::stopAll() {
 }
 
 void FfbEngine::setDeviceGain(float gain)        { deviceGain_ = clampf(gain, 0.0f, 1.0f); }
+void FfbEngine::setMaxOutput(float maxAbs)        { maxOutput_ = clampf(maxAbs, 0.0f, 1.0f); }
 void FfbEngine::setActuatorsEnabled(bool enabled) { actuatorsEnabled_ = enabled; }
 void FfbEngine::setPaused(bool paused)            { paused_ = paused; }
 
@@ -158,6 +166,13 @@ uint8_t FfbEngine::playingCount() const {
   return n;
 }
 
+uint8_t FfbEngine::firstPlaying() const {
+  for (uint8_t i = 0; i < MAX_FFB_EFFECTS; i++) {
+    if (effects_[i].allocated && effects_[i].playing) return i + 1;
+  }
+  return 0;
+}
+
 const FfbEffect& FfbEngine::effect(uint8_t index) const {
   static FfbEffect empty;
   if (index < 1 || index > MAX_FFB_EFFECTS) return empty;
@@ -165,9 +180,10 @@ const FfbEffect& FfbEngine::effect(uint8_t index) const {
 }
 
 // Envelope multiplier (attack ramp up, fade ramp down). 1.0 when no envelope.
-float FfbEngine::envelopeScale(const FfbEffect& e, uint32_t now_ms) const {
+// elapsed_ms is time within the current iteration (so envelopes repeat on loop).
+float FfbEngine::envelopeScale(const FfbEffect& e, uint32_t elapsed_ms) const {
   if (!e.env.present) return 1.0f;
-  uint32_t t = now_ms - e.startTime_ms;
+  uint32_t t = elapsed_ms;
   float scale = 1.0f;
 
   if (e.env.attackTime_ms > 0 && t < e.env.attackTime_ms) {
@@ -248,13 +264,25 @@ bool FfbEngine::update(uint32_t now_ms, const float* pos, float* forceOut,
     FfbEffect& e = effects_[i];
     if (!e.allocated || !e.playing) continue;
 
-    // Duration timeout (0 = infinite).
-    if (e.duration_ms > 0 && (now_ms - e.startTime_ms) >= e.duration_ms) {
-      e.playing = false;
-      continue;
+    uint32_t total = now_ms - e.startTime_ms;
+
+    // Duration + loop handling. duration_ms == 0 means infinite (runs until
+    // stopped). Otherwise the effect plays `iters` iterations of duration_ms;
+    // loopCount 0xFF = infinite loop, 0 = play once.
+    uint32_t elapsed;   // time within the current iteration
+    if (e.duration_ms == 0) {
+      elapsed = total;
+    } else {
+      bool infiniteLoop = (e.loopCount == 0xFF);
+      uint32_t iters = (e.loopCount == 0) ? 1u : e.loopCount;
+      if (!infiniteLoop && total >= (uint32_t)e.duration_ms * iters) {
+        e.playing = false;
+        continue;
+      }
+      elapsed = total % e.duration_ms;
     }
 
-    float env = envelopeScale(e, now_ms);
+    float env = envelopeScale(e, elapsed);
 
     for (uint8_t a = 0; a < numAxes; a++) {
       if (!(e.axisMask & (1 << a))) continue;
@@ -267,7 +295,7 @@ bool FfbEngine::update(uint32_t now_ms, const float* pos, float* forceOut,
 
         case FFB_ET_RAMP: {
           float frac = (e.duration_ms > 0)
-                       ? (float)(now_ms - e.startTime_ms) / (float)e.duration_ms
+                       ? (float)elapsed / (float)e.duration_ms
                        : 0.0f;
           frac = clampf(frac, 0.0f, 1.0f);
           float v = e.rampStart + (e.rampEnd - e.rampStart) * frac;
@@ -281,7 +309,7 @@ bool FfbEngine::update(uint32_t now_ms, const float* pos, float* forceOut,
         case FFB_ET_SAWTOOTH_UP:
         case FFB_ET_SAWTOOTH_DOWN: {
           float ph = e.phase + ((e.period_ms > 0)
-                     ? (float)(now_ms - e.startTime_ms) / (float)e.period_ms
+                     ? (float)elapsed / (float)e.period_ms
                      : 0.0f);
           ph -= floorf(ph);
           float v = e.periodicOffset + e.periodicMag * periodicValue(e.type, ph);
@@ -291,15 +319,18 @@ bool FfbEngine::update(uint32_t now_ms, const float* pos, float* forceOut,
 
         // Condition effects: negate the raw formula so a positive coefficient
         // resists motion (spring centers, damper/friction/inertia oppose).
+        // Each axis uses its own condition parameter block (cond[a]). Direction
+        // is intentionally NOT applied — a condition is inherently per-axis, and
+        // applying a -1 direction would invert a spring into instability.
         case FFB_ET_SPRING:
-          contrib = -conditionForce(e.cond, pos[a]) * e.gain * e.dirScale[a];
+          contrib = -conditionForce(e.cond[a], pos[a]) * e.gain;
           break;
         case FFB_ET_DAMPER:
         case FFB_ET_FRICTION:
-          contrib = -conditionForce(e.cond, vel_[a]) * e.gain * e.dirScale[a];
+          contrib = -conditionForce(e.cond[a], vel_[a]) * e.gain;
           break;
         case FFB_ET_INERTIA:
-          contrib = -conditionForce(e.cond, accel_[a]) * e.gain * e.dirScale[a];
+          contrib = -conditionForce(e.cond[a], accel_[a]) * e.gain;
           break;
 
         default:
@@ -309,10 +340,10 @@ bool FfbEngine::update(uint32_t now_ms, const float* pos, float* forceOut,
     }
   }
 
-  // Device gain + final clamp.
+  // Device gain, then the hard safety clamp (maxOutput_).
   bool active = false;
   for (uint8_t a = 0; a < numAxes; a++) {
-    forceOut[a] = clampf(forceOut[a] * deviceGain_, -1.0f, 1.0f);
+    forceOut[a] = clampf(forceOut[a] * deviceGain_, -maxOutput_, maxOutput_);
     if (forceOut[a] != 0.0f) active = true;
   }
   return active;
