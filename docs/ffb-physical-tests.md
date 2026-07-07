@@ -30,6 +30,15 @@ cd firmware/seedjoy
   build is `0x80F4`).
 - Force select **USB mode**: hold the D9 mode pin HIGH at boot (or connect over USB — see the main
   README). FFB runs in USB mode only.
+- **Enable + calibrate at least axis 0 before the force tests.** Axes ship **disabled** (an audit
+  safety default), and a disabled axis reports position 0 — so **position/velocity effects (spring,
+  damper) produce zero force and a dark LED no matter how you move the pot** until the axis is
+  enabled. Do this in the web configurator (enable axis 0, run its min/center/max calibration).
+  Constant/sine/ramp don't depend on position, so they'll "work" even with axes disabled — don't let
+  that fool you into thinking the spring is broken.
+- **Actuator enable:** force output also requires the host to send PID Device Control "enable
+  actuators". Linux `hid-pidff` does this automatically when an effect is played (so it's not a
+  manual step via `fftest`); only matters if you drive the device from a raw script.
 
 **Tools you'll need** (Linux is the easiest host for FFB bring-up):
 - `linuxconsoletools` (provides `fftest`, `jstest`, `evtest`) — `apt install linuxconsoletools`
@@ -112,7 +121,11 @@ effects (`MAX_FFB_EFFECTS`) and reports full beyond that.
 ## 5. 🔌📈 Force output is correct (observed on the LED / scope)
 
 The status LED brightness = axis-0 **|force|** (magnitude only; sign needs a motor or a scope on the
-DIR pin once wired). Run each from `fftest`:
+DIR pin once wired). Run each from `fftest`.
+
+> **Prerequisite (spring/damper only):** axis 0 must be enabled + calibrated (see §0). A disabled
+> axis reports position 0, so spring/damper output is always zero — you'd see a dark LED and wrongly
+> conclude the effect is broken.
 
 | Effect | Do this | Expected on the LED |
 |--------|---------|---------------------|
