@@ -10,12 +10,22 @@
 #include "config.h"
 #include <Adafruit_TinyUSB.h>
 
+#if ENABLE_FFB
+class FfbRuntime;   // fwd decl; full include in usb_hid.cpp
+#endif
+
 class USBHIDController {
 public:
   USBHIDController();
-  
+
   // Initialize USB HID (call in setup)
   bool begin(const DeviceConfig* config);
+
+#if ENABLE_FFB
+  // Provide the FFB runtime that receives PID output/feature reports. Call
+  // before begin(). Without it, PID reports are ignored (safe no-op).
+  void setFfbRuntime(FfbRuntime* rt);
+#endif
   
   // Send HID report with current axis and button states
   void sendReport(const int16_t axes[MAX_AXES], const uint8_t buttonBytes[8]);
@@ -55,6 +65,16 @@ private:
   // Process incoming data (for configuration)
   static void hidReportCallback(uint8_t report_id, hid_report_type_t report_type,
                                  uint8_t const* buffer, uint16_t bufsize);
+
+#if ENABLE_FFB
+  // PID report routing. TinyUSB delivers OUT-endpoint reports with report_id=0
+  // and the id as buffer[0]; feature reports carry report_id directly.
+  static FfbRuntime* ffbRuntime_;
+  static void ffbSetReportCb(uint8_t report_id, hid_report_type_t report_type,
+                             uint8_t const* buffer, uint16_t bufsize);
+  static uint16_t ffbGetReportCb(uint8_t report_id, hid_report_type_t report_type,
+                                 uint8_t* buffer, uint16_t reqlen);
+#endif
 };
 
 #endif // USB_HID_H

@@ -27,6 +27,10 @@
 #include "usb_hid.h"
 #include "ble_hid.h"
 #include "ble_config.h"
+#if ENABLE_FFB
+#include "ffb_runtime.h"
+#include "ffb_motor.h"
+#endif
 
 // Global objects
 DeviceConfig deviceConfig;
@@ -36,6 +40,16 @@ ButtonsProcessor buttons;
 USBHIDController usbHID;
 BLEHIDController bleHID;
 BLEConfigService bleConfig;
+
+#if ENABLE_FFB
+// Force feedback runs in USB mode only (see docs/ffb-plan.md). The engine is
+// unit-tested (firmware/tests); the USB PID descriptor/handshake is NOT yet
+// hardware-validated.
+FfbRuntime ffbRuntime;
+MotorOutput ffbMotor;
+uint32_t lastFfbTick = 0;
+void updateFFB();
+#endif
 
 // Current operation mode
 OperationMode currentMode = MODE_USB;
@@ -122,10 +136,19 @@ void setup() {
   // Initialize appropriate HID interface
   if (currentMode == MODE_USB) {
     Serial.println("Starting USB HID...");
+#if ENABLE_FFB
+    // Register the FFB runtime before begin() so PID reports route as soon as
+    // the host enumerates.
+    usbHID.setFfbRuntime(&ffbRuntime);
+#endif
     if (usbHID.begin(&deviceConfig)) {
       Serial.println("USB HID initialized successfully");
       digitalWrite(STATUS_LED_PIN, LOW);   // Turn off status LED
       digitalWrite(CONNECTION_LED_PIN, HIGH); // Turn on connection LED
+#if ENABLE_FFB
+      ffbMotor.begin();
+      Serial.println("FFB runtime active (USB PID) - UNVALIDATED, see docs/ffb-plan.md");
+#endif
     } else {
       Serial.println("USB HID initialization failed!");
       blinkStatus(5); // Blink 5 times to indicate error
@@ -184,7 +207,14 @@ void loop() {
   
   // Update all inputs
   updateInputs();
-  
+
+#if ENABLE_FFB
+  // Force-feedback loop (USB mode only).
+  if (currentMode == MODE_USB) {
+    updateFFB();
+  }
+#endif
+
   // Send HID reports at configured poll rate
   uint32_t now = millis();
   uint32_t reportInterval = deviceConfig.usbPollRate; // 1ms for USB, can be adjusted
@@ -328,10 +358,42 @@ void initializeHardware() {
 void updateInputs() {
   // Update axes (read ADC, apply calibration, curves)
   axes.update();
-  
+
   // Update buttons (read pins, debounce, map)
   buttons.update();
 }
+
+#if ENABLE_FFB
+// Force-feedback tick. Runs at ~1 kHz off the main loop (a millis() gate). The
+// engine is a pure function of (position, effects); promoting this to a
+// hardware-timer ISR is a Phase 3 hardening step and needs care around the USB
+// callbacks that mutate engine state — keep this thin so that move is easy.
+void updateFFB() {
+  uint32_t now = millis();
+  if (now - lastFfbTick < 1) return;   // ~1 kHz cap
+  lastFfbTick = now;
+
+  // Safety: if USB is detached/suspended, never leave a motor energized.
+  if (!TinyUSBDevice.mounted()) {
+    ffbMotor.disableAll();
+    return;
+  }
+
+  uint8_t n = (MAX_FFB_AXES < MAX_AXES) ? MAX_FFB_AXES : MAX_AXES;
+  float pos[MAX_FFB_AXES];
+  for (uint8_t i = 0; i < n; i++) {
+    // Calibrated axis value is centered; normalize the +/-32767 output to -1..1.
+    pos[i] = axes.getAxisValue(i) / 32767.0f;
+  }
+
+  float force[MAX_FFB_AXES];
+  ffbRuntime.engine().update(now, pos, force, n);
+
+  for (uint8_t i = 0; i < n; i++) {
+    ffbMotor.setForce(i, force[i]);
+  }
+}
+#endif
 
 void sendHIDReports() {
   // SAFETY: Don't send HID reports in configuration mode

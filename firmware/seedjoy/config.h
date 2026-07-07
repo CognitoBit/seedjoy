@@ -9,6 +9,7 @@
 #define CONFIG_H
 
 #include <Arduino.h>
+#include "ffb_config.h"   // ENABLE_FFB gate (Arduino-free)
 
 // Firmware version
 #define FIRMWARE_VERSION_MAJOR 0
