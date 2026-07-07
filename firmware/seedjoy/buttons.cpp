@@ -14,6 +14,10 @@ ButtonsProcessor::ButtonsProcessor() : config_(nullptr), totalButtonCount_(MAX_B
     debouncedStates_[i] = false;
     lastChangeTime_[i] = 0;
   }
+  for (int i = 0; i < MAX_SHIFT_REGISTER_BUTTONS; i++) {
+    srDebouncedStates_[i] = false;
+    srLastChangeTime_[i] = 0;
+  }
 }
 
 void ButtonsProcessor::begin(const DeviceConfig* config) {
@@ -110,13 +114,26 @@ void ButtonsProcessor::update() {
   if (config_->shiftRegisters.enabled) {
     shiftRegisters_.update();
     
-    // Map shift register buttons to logical buttons
-    // srOffset_ = 0 in SR-only mode; MAX_BUTTONS when GPIO buttons are also active
+    // Map shift register buttons to logical buttons, with the same time-based
+    // debounce used for GPIO (a state must persist DEBOUNCE_MS before it is
+    // accepted). srOffset_ = 0 in SR-only mode; MAX_BUTTONS when GPIO buttons
+    // are also active.
     uint8_t srButtonCount = shiftRegisters_.getButtonCount();
     for (uint8_t i = 0; i < srButtonCount; i++) {
+      bool raw = shiftRegisters_.getButtonState(i);
+
+      if (raw != srDebouncedStates_[i]) {
+        if (now - srLastChangeTime_[i] >= DEBOUNCE_MS) {
+          srDebouncedStates_[i] = raw;
+          srLastChangeTime_[i] = now;
+        }
+      } else {
+        srLastChangeTime_[i] = now;
+      }
+
       uint8_t logicalNum = srOffset_ + i;
       if (logicalNum < MAX_TOTAL_BUTTONS) {
-        logicalStates_[logicalNum] = shiftRegisters_.getButtonState(i);
+        logicalStates_[logicalNum] = srDebouncedStates_[i];
       }
     }
   }

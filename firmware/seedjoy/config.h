@@ -147,7 +147,7 @@ struct DeviceConfig {
   uint8_t usbPollRate;      // Poll rate in ms (1 = 1000Hz)
   
   // BLE settings
-  uint16_t bleConnInterval; // Connection interval (7.5ms units)
+  uint16_t bleConnInterval; // Connection interval in 1.25ms units (min 6 = 7.5ms per BLE spec)
   int8_t bleTxPower;        // TX power in dBm (-40 to +4)
   
   // Axis configuration
@@ -178,7 +178,7 @@ struct DeviceConfig {
     usbPID = 0x80F4;  // Generic HID
     usbPollRate = 1;
     
-    bleConnInterval = 2;  // 2 * 1.25ms = 2.5ms (try for low latency)
+    bleConnInterval = 6;  // 6 * 1.25ms = 7.5ms (BLE minimum; lowest legal latency)
     bleTxPower = 0;       // 0 dBm
     
     // Initialize default axes (DISABLED by default to prevent floating pin noise)

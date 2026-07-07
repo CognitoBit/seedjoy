@@ -39,10 +39,14 @@ public:
   void setHIDEnabled(bool enabled);
   bool isHIDEnabled() const;
   
+public:
+  // Update BLE battery service level (0-100%)
+  void setBatteryLevel(uint8_t percent);
+
 private:
-  BLEDis bledis_;         // Device Information Service
-  BLEHidAdafruit blehid_; // HID Service
-  BLEBas blebas_;         // Battery Service
+  BLEDis bledis_;          // Device Information Service
+  BLEHidGeneric blehid_;   // HID Service (custom joystick report map)
+  BLEBas blebas_;          // Battery Service
   
   bool hidEnabled_;       // Flag to enable/disable HID reports
   

@@ -62,6 +62,12 @@ bool StorageManager::hasValidConfig() {
 }
 
 bool StorageManager::writeConfigFile(const DeviceConfig* config) {
+  // Remove any existing file first. Adafruit LittleFS opens FILE_O_WRITE in
+  // append mode (seek-to-end, no truncate), so without this every save would
+  // append another full struct and grow the file, failing the size check on
+  // next boot and silently reverting to defaults.
+  InternalFS.remove(CONFIG_FILENAME);
+
   // Open file for writing
   File configFile = InternalFS.open(CONFIG_FILENAME, FILE_O_WRITE);
   if (!configFile) {

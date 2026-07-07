@@ -51,10 +51,15 @@ private:
   // Physical button states (current reading) - GPIO only
   bool physicalStates_[MAX_BUTTONS];
   
-  // Debounce tracking - GPIO only (shift registers are hardware debounced)
+  // Debounce tracking - GPIO
   uint32_t lastChangeTime_[MAX_BUTTONS];
   bool debouncedStates_[MAX_BUTTONS];
-  
+
+  // Debounce tracking - shift register buttons (mechanical switches, not
+  // hardware debounced; without this, contact chatter double-fires at report rate)
+  uint32_t srLastChangeTime_[MAX_SHIFT_REGISTER_BUTTONS];
+  bool srDebouncedStates_[MAX_SHIFT_REGISTER_BUTTONS];
+
   // Total button count (GPIO + shift register)
   uint8_t totalButtonCount_;
 

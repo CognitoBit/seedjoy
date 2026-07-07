@@ -48,11 +48,15 @@ bool wasConnected = false;
 bool serialButtonStream = false;   // true while browser is on the Button Mapping tab
 uint32_t lastButtonStreamTime = 0; // rate-limit to ~20 Hz
 
-// Battery monitoring
+// Battery monitoring (XIAO nRF52840)
+// Read PIN_VBAT (P0.31) with VBAT_ENABLE (P0.14) driven LOW to connect the
+// on-board divider, using the 3.0V ADC reference.
 #define VBAT_PIN PIN_VBAT
-#define VBAT_MV_PER_LSB (0.73242188F)  // 3.0V ADC range / 4096
-#define VBAT_DIVIDER (0.5F)            // Voltage divider
-#define VBAT_DIVIDER_COMP (2.0F)       // Compensation factor
+#define VBAT_MV_PER_LSB (0.73242188F)  // 3.0V ADC range / 4096 (requires AR_INTERNAL_3_0)
+// Compensation for the XIAO's 1M / 0.51M divider: 1/(0.51/1.51) ≈ 2.96.
+// This is board-specific and NOT defined in the BSP — calibrate against a
+// multimeter if the reported voltage looks off (the % is a rough estimate anyway).
+#define VBAT_DIVIDER_COMP (2.96F)
 
 // Timing
 uint32_t lastReportTime = 0;
@@ -375,19 +379,36 @@ void updateBatteryLevel() {
   Serial.print("V (");
   Serial.print(batteryPercent);
   Serial.println("%)");
-  
-  // Update BLE battery service (if BLE is being used)
-  // Note: This requires access to BLEBas, which could be exposed via bleHID
-  // For now, this is a placeholder
+
+  // Push to the BLE Battery Service so hosts see the real level.
+  if (currentMode == MODE_BLE) {
+    bleHID.setBatteryLevel(batteryPercent);
+  }
 }
 
 float readVBAT() {
-  // Read battery voltage via analog pin
+  // Connect the on-board battery divider (active LOW on the XIAO nRF52840).
+  pinMode(VBAT_ENABLE, OUTPUT);
+  digitalWrite(VBAT_ENABLE, LOW);
+
+  // VBAT_MV_PER_LSB assumes the 3.0V reference, which the axis pipeline does
+  // not use — set it just for this read, then restore.
+  analogReference(AR_INTERNAL_3_0);
+  analogReadResolution(12);
+  delay(1);  // let the ADC settle after the reference switch
+
   float raw = analogRead(VBAT_PIN);
-  
-  // Convert to voltage
+
+  // Restore reference; keep 12-bit resolution for the axes.
+  analogReference(AR_DEFAULT);
+  analogReadResolution(12);
+
+  // Release the divider (high-Z) to stop the ~2.5uA drain between reads.
+  pinMode(VBAT_ENABLE, INPUT);
+
+  // raw(0..4095) -> tap mV -> actual battery mV -> volts
   float vbat = raw * VBAT_MV_PER_LSB * VBAT_DIVIDER_COMP / 1000.0;
-  
+
   return vbat;
 }
 

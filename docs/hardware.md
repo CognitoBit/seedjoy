@@ -29,6 +29,11 @@ This guide shows how to wire potentiometers and buttons to your Seeed Studio XIA
          USB-C Port
 ```
 
+> Note: the ASCII sketch above is illustrative only and its port labels are not
+> reliable. For the authoritative pin → port (Pxx.yy) mapping, see
+> `firmware/seedjoy/config.h` and the Seeed XIAO nRF52840 datasheet. The
+> default firmware uses shift registers (D6/D7/D8), not direct GPIO buttons.
+
 ### Default Pin Assignment
 
 **Analog Axes:**
@@ -37,13 +42,13 @@ This guide shows how to wire potentiometers and buttons to your Seeed Studio XIA
 - A2 (P0.28) → Axis 3 (Z)
 - A3 (P0.29) → Axis 4 (Rz/Throttle)
 
-**Digital Buttons:**
-- D1-D10 → Buttons 1-10
-- MOSI, MISO, SCK → Buttons 11-13
-- TX, RX, SCL → Buttons 14-16
+**Digital Buttons (default: shift-register mode):**
+- D6 (P1.11) → SR data, D7 (P1.12) → SR clock, D8 (P1.13) → SR load
+- Up to 56 buttons via 7x 74HC165
+- Optional direct GPIO buttons (disabled by default): D4, D5, D10
 
 **Special:**
-- D0 → Mode selection (USB/BLE)
+- D9 → Mode selection (USB/BLE)
 - LED_RED → Status indicator
 - LED_BLUE → Connection indicator
 

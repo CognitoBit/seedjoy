@@ -9,7 +9,11 @@ const uint8_t BLEHIDController::HID_REPORT_MAP[] = {
   0x05, 0x01,        // Usage Page (Generic Desktop)
   0x09, 0x04,        // Usage (Joystick)
   0xA1, 0x01,        // Collection (Application)
-  
+
+  // Report ID 1 — required: BLEHidGeneric hardcodes the input report-reference
+  // descriptor to ID (index+1)=1, so the report map must declare a matching ID.
+  0x85, 0x01,        //   Report ID (1)
+
   // 4 Axes
   0x05, 0x01,        //   Usage Page (Generic Desktop)
   0x09, 0x30,        //   Usage (X)
@@ -37,7 +41,8 @@ const uint8_t BLEHIDController::HID_REPORT_MAP[] = {
 
 const uint16_t BLEHIDController::HID_REPORT_MAP_SIZE = sizeof(HID_REPORT_MAP);
 
-BLEHIDController::BLEHIDController() : hidEnabled_(false) {
+BLEHIDController::BLEHIDController() : blehid_(1, 0, 0), hidEnabled_(false) {
+  // 1 input report, 0 output, 0 feature
   memset(&report_, 0, sizeof(report_));
 }
 
@@ -73,25 +78,35 @@ bool BLEHIDController::begin(const DeviceConfig* config) {
   bledis_.setFirmwareRev(fwVersion);
   bledis_.begin();
   
-  // Start BLE HID service
-  blehid_.begin();
-  
-  // Set HID Report Map
+  // Configure the HID service BEFORE begin() — BLEHidGeneric::begin() builds the
+  // GATT characteristics (report map, input report, HID info) from this state,
+  // so setReportMap/setReportLen/setHidInfo must all precede it.
+  uint16_t inputLen[] = { sizeof(report_) };  // single 16-byte joystick input report
+  blehid_.setReportLen(inputLen, nullptr, nullptr);
+  blehid_.enableKeyboard(false);
+  blehid_.enableMouse(false);
   blehid_.setHidInfo(0x0111, 0x00, 0x01); // HID v1.11, Non-localized, not remote wake
   blehid_.setReportMap(HID_REPORT_MAP, HID_REPORT_MAP_SIZE);
-  
+
+  // Start BLE HID service
+  blehid_.begin();
+
   // Start Battery Service
   blebas_.begin();
   blebas_.write(100); // Initial battery level
   
-  // Set connection interval
-  // min = config->bleConnInterval * 1.25ms
-  // max = min * 2 for flexibility
+  // Set connection interval. Units are 1.25ms. The BLE spec requires the
+  // interval to be within [6, 3200] (7.5ms..4s); values below 6 are rejected by
+  // the SoftDevice and silently leave the default in place, so clamp here.
   uint16_t minInterval = config->bleConnInterval;
+  if (minInterval < 6) minInterval = 6;        // 7.5ms floor (BLE minimum)
   uint16_t maxInterval = minInterval * 2;
-  if (maxInterval > 100) maxInterval = 100; // Cap at 125ms
-  
-  Bluefruit.Periph.setConnInterval(minInterval, maxInterval);
+  if (maxInterval > 100) maxInterval = 100;    // Cap at 125ms
+  if (maxInterval < minInterval) maxInterval = minInterval;
+
+  if (!Bluefruit.Periph.setConnInterval(minInterval, maxInterval)) {
+    Serial.println("WARNING: setConnInterval rejected — using SoftDevice default");
+  }
   
   // NOTE: Do NOT start advertising here!
   // Advertising will be started manually after all services are initialized
@@ -144,9 +159,9 @@ void BLEHIDController::sendReport(const int16_t axes[MAX_AXES], const uint8_t bu
   report_.z = axes[2];
   report_.rz = axes[3];
   memcpy(report_.buttons, buttonBytes, 8);
-  
-  // Send input report (reportID = 0)
-  blehid_.inputReport(0, (uint8_t*)&report_, sizeof(report_));
+
+  // Send input report (reportID = 1; matches the Report ID in HID_REPORT_MAP)
+  blehid_.inputReport(1, (uint8_t*)&report_, sizeof(report_));
 }
 
 bool BLEHIDController::isConnected() {
@@ -201,11 +216,19 @@ void BLEHIDController::setHIDEnabled(bool enabled) {
     // Send a zero report to clear any active inputs
     if (isConnected()) {
       memset(&report_, 0, sizeof(report_));
-      blehid_.inputReport(0, (uint8_t*)&report_, sizeof(report_));
+      blehid_.inputReport(1, (uint8_t*)&report_, sizeof(report_));
     }
   }
 }
 
 bool BLEHIDController::isHIDEnabled() const {
   return hidEnabled_;
+}
+
+void BLEHIDController::setBatteryLevel(uint8_t percent) {
+  if (percent > 100) percent = 100;
+  blebas_.write(percent);
+  if (isConnected()) {
+    blebas_.notify(percent);
+  }
 }

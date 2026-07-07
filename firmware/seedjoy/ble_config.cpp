@@ -246,7 +246,7 @@ static String bleExtractJsonStr(const String& j, const String& key, const String
   return end < 0 ? dv : j.substring(idx, end);
 }
 static float bleExtractJsonFloat(const String& j, const String& key, float dv = 0.0f) {
-  String s = "\"" + key + \":\"";
+  String s = "\"" + key + "\":";  // match "key": (numeric value, e.g. "expoFactor":0.25)
   int idx = j.indexOf(s);
   if (idx < 0) return dv;
   idx += s.length();

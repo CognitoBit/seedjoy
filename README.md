@@ -66,7 +66,7 @@ Use a 10 kΩ pull-up resistor on each button input pin (Dn) of each 74HC165.
 
 | Pin | Function |
 |-----|----------|
-| D9 (P0.12) | Mode select (HIGH = USB, LOW = BLE) |
+| D9 (P1.14) | Mode select (HIGH = USB, LOW = BLE) |
 | LED\_RED | Status (blinks on boot) |
 | LED\_BLUE | BLE connection indicator |
 | VBAT | Battery voltage sense |
@@ -304,7 +304,7 @@ Inspired by [FreeJoy](https://github.com/FreeJoy-Team/FreeJoy) by Alexandr Yaros
 - **Analog inputs**: 4x potentiometers (10kΩ recommended) on A0-A3
 - **Digital inputs**: 16x buttons with pull-up resistors (or use internal pull-ups)
 - **Optional**: LiPo battery (3.7V, 100-500mAh) for wireless operation
-- **Optional**: Mode selection button on D0
+- **Optional**: Mode selection button on D9
 
 ## Pin Configuration (Default)
 
@@ -313,27 +313,19 @@ Inspired by [FreeJoy](https://github.com/FreeJoy-Team/FreeJoy) by Alexandr Yaros
 - A1 (P0.03) - Axis 2 (Y)
 - A2 (P0.28) - Axis 3 (Z)
 - A3 (P0.29) - Axis 4 (Rz)
-`¶++
-### Buttons
-- D1 (P0.04) - Button 1
-- D2 (P0.05) - Button 2
-- D3 (P0.06) - Button 3
-- D4 (P0.07) - Button 4
-- D5 (P0.08) - Button 5
-- D6 (P0.09) - Button 6
-- D7 (P0.10) - Button 7
-- D8 (P0.11) - Button 8
-- D9 (P0.12) - Button 9
-- D10 (P0.13) - Button 10
-- MOSI (P0.26) - Button 11
-- MISO (P0.27) - Button 12
-- SCK (P0.30) - Button 13
-- TX (P0.31) - Button 14
-- RX (P0.00) - Button 15
-- SCL (P0.01) - Button 16
+### Buttons (default: shift-register mode)
+- D6 (P1.11) - SR data (74HC165 QH of last chip)
+- D7 (P1.12) - SR clock
+- D8 (P1.13) - SR load / latch
+- Up to 56 buttons via 7x 74HC165 (see the Shift Register Wiring table above)
+
+Optional direct GPIO buttons (disabled by default in SR-only mode):
+- D4 (P0.04) - GPIO button
+- D5 (P0.05) - GPIO button
+- D10 (P1.15) - GPIO button
 
 ### Special
-- D0 (P1.11) - Mode selection (hold on boot: USB if HIGH, BLE if LOW)
+- D9 (P1.14) - Mode selection (hold on boot: USB if HIGH, BLE if LOW)
 - LED_RED - Status indicator
 - LED_BLUE - Connection indicator
 
