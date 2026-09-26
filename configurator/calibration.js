@@ -53,8 +53,10 @@ class CalibrationManager {
             // Get current axis values
             let rawValue, processedValue;
             
-            if (this.ble.isConnected() && this.latestAxisData) {
-                // Use real-time data from device
+            if (this.ble.isConnected()) {
+                // Connected: only ever show real device data. Never fall back to
+                // the simulation, or calibration would use made-up values.
+                if (!this.latestAxisData) return;
                 rawValue = this.latestAxisData.raw[this.currentAxis];
                 processedValue = this.latestAxisData.processed[this.currentAxis];
             } else {
@@ -292,12 +294,14 @@ class CalibrationManager {
      * Get current raw axis value
      */
     async getCurrentRawValue() {
-        if (this.ble.isConnected() && this.latestAxisData) {
-            // Use real-time data from device
+        if (this.ble.isConnected()) {
+            // Never calibrate against simulated values while a device is attached.
+            if (!this.latestAxisData) {
+                throw new Error('No live axis data from the device yet (open the Axis Calibration tab and wait a moment)');
+            }
             return this.latestAxisData.raw[this.currentAxis];
-        } else {
-            return this.mockAxisValues[this.currentAxis];
         }
+        return this.mockAxisValues[this.currentAxis];
     }
     
     /**

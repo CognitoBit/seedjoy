@@ -62,6 +62,8 @@ const uint32_t CONFIG_MODE_TIMEOUT = 60000; // 60 seconds after connection (was 
 bool wasConnected = false;
 bool serialButtonStream = false;   // true while browser is on the Button Mapping tab
 uint32_t lastButtonStreamTime = 0; // rate-limit to ~20 Hz
+bool serialAxisStream = false;     // true while browser is on the Axis Calibration tab
+uint32_t lastAxisStreamTime = 0;   // rate-limit to ~20 Hz
 
 // Battery monitoring (XIAO nRF52840)
 // Read PIN_VBAT (P0.31) with VBAT_ENABLE (P0.14) driven LOW to connect the
@@ -109,7 +111,11 @@ void setup() {
   pinMode(CONNECTION_LED_PIN, OUTPUT);
   digitalWrite(STATUS_LED_PIN, LED_ON);  // Turn on status LED during init
   digitalWrite(CONNECTION_LED_PIN, LED_OFF);
-  
+
+  // Hold the battery divider's low side LOW from boot (see readVBAT()).
+  pinMode(VBAT_ENABLE, OUTPUT);
+  digitalWrite(VBAT_ENABLE, LOW);
+
   // Initialize storage
   Serial.println("Initializing storage...");
   storage.begin();
@@ -259,6 +265,22 @@ void loop() {
     }
     Serial.println("]}}");
     lastButtonStreamTime = now;
+  }
+
+  // Stream raw + processed axis values for the Web Serial calibration tab (~20 Hz)
+  if (serialAxisStream && (now - lastAxisStreamTime >= 50)) {
+    Serial.print("{\"type\":\"axes\",\"data\":{\"raw\":[");
+    for (int ai = 0; ai < MAX_AXES; ai++) {
+      if (ai > 0) Serial.print(",");
+      Serial.print(axes.getRawValue(ai));
+    }
+    Serial.print("],\"processed\":[");
+    for (int ai = 0; ai < MAX_AXES; ai++) {
+      if (ai > 0) Serial.print(",");
+      Serial.print(axes.getAxisValue(ai));
+    }
+    Serial.println("]}}");
+    lastAxisStreamTime = now;
   }
 
   // Small delay to prevent tight looping (optional)
@@ -470,12 +492,14 @@ float readVBAT() {
 
   float raw = analogRead(VBAT_PIN);
 
-  // Restore reference; keep 12-bit resolution for the axes.
-  analogReference(AR_DEFAULT);
+  // Restore the axes' ratiometric reference (see axes.cpp); keep 12-bit.
+  analogReference(AR_VDD4);
   analogReadResolution(12);
 
-  // Release the divider (high-Z) to stop the ~2.5uA drain between reads.
-  pinMode(VBAT_ENABLE, INPUT);
+  // Keep VBAT_ENABLE driven LOW. Releasing it (high-Z) lets P0.31 float up
+  // toward raw VBAT (up to 4.2 V) through the 1M resistor, above the nRF52840's
+  // 3.6 V absolute maximum — Seeed's guidance is to hold P0.14 LOW. The divider
+  // then costs ~3 uA continuously, which is negligible.
 
   // raw(0..4095) -> tap mV -> actual battery mV -> volts
   float vbat = raw * VBAT_MV_PER_LSB * VBAT_DIVIDER_COMP / 1000.0;
@@ -630,6 +654,8 @@ void processCommand(String cmd) {
         Serial.println("read_config - Send config as JSON");
         Serial.println("write_config:{JSON} - Write config from JSON");
         Serial.println("ping - Test connection");
+        Serial.println("stream_buttons / stop_stream - live button states");
+        Serial.println("stream_axes / stop_axes - live axis raw+processed values");
         Serial.println("? - Show this help");
         Serial.println("=======================\n");
         break;
@@ -655,6 +681,14 @@ void processCommand(String cmd) {
   else if (cmd == "stop_stream") {
     serialButtonStream = false;
     Serial.println("{\"type\":\"status\",\"message\":\"Button stream stopped\",\"success\":true}");
+  }
+  else if (cmd == "stream_axes") {
+    serialAxisStream = true;
+    Serial.println("{\"type\":\"status\",\"message\":\"Axis stream started\",\"success\":true}");
+  }
+  else if (cmd == "stop_axes") {
+    serialAxisStream = false;
+    Serial.println("{\"type\":\"status\",\"message\":\"Axis stream stopped\",\"success\":true}");
   }
   else {
     Serial.print("Unknown command: ");

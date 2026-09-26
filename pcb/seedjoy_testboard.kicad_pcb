@@ -7357,10 +7357,10 @@
 			)
 		)
 	)
-	(gr_text "BTN1 ... BTN8 (HID 1-8)"
+	(gr_text "BTN1-8 = HID 1-8 (configurator: Number of chips = 1)"
 		(at 150 165 0)
 		(layer "F.SilkS")
-		(uuid "81b6c4a7-6ce3-485f-bec0-c8dde45c339f")
+		(uuid "95cf9563-2eb0-4671-bcba-b330c23fb7bc")
 		(effects
 			(font
 				(size 1 1)

@@ -51,6 +51,9 @@ document.addEventListener('DOMContentLoaded', () => {
  */
 function setupConnectionCallbacks(conn) {
     conn.onConnectionChange = handleConnectionChange;
+    // Route live axis data from BOTH transports to the calibration manager
+    // (it was only ever hooked to whichever connection existed at startup).
+    conn.onAxisData = (data) => { calibration.latestAxisData = data; };
     conn.onBatteryChange = handleBatteryChange;
     conn.onButtonData = handleButtonData;
     conn.onStatusMessage = handleStatusMessage;
@@ -131,6 +134,15 @@ function initializeTabs() {
                 calibration.startMonitoring();
             } else {
                 calibration.stopMonitoring();
+            }
+
+            // Start/stop axis streaming on the calibration tab (serial path only)
+            if (activeConnection && typeof activeConnection.startAxisStream === 'function') {
+                if (tabName === 'axes') {
+                    activeConnection.startAxisStream().catch(() => {});
+                } else {
+                    activeConnection.stopAxisStream().catch(() => {});
+                }
             }
 
             // Start/stop button streaming on the button-test tab (serial path only)

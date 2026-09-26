@@ -276,7 +276,9 @@ Pin values in the configurator and in the JSON protocol are **Arduino pin number
 | `read_config` | `{"type":"config","data":{…}}` | Full config as JSON |
 | `write_config:{JSON}` | `{"type":"status","success":true\|false,"message":"…"}` | Apply and save config |
 | `stream_buttons` | `{"type":"buttons","data":{"states":[b0,…,b7]}}` at 20 Hz | Start live button stream (8 bytes = 64 bits) |
-| `stop_stream` | `{"type":"status",…}` | Stop the stream |
+| `stop_stream` | `{"type":"status",…}` | Stop the button stream |
+| `stream_axes` | `{"type":"axes","data":{"raw":[4],"processed":[4]}}` at 20 Hz | Live axis values (the calibration tab uses this over USB) |
+| `stop_axes` | `{"type":"status",…}` | Stop the axis stream |
 | `C` | text | BLE mode: (re)enter the config window, HID off |
 | `H` | text | BLE mode: enable HID now |
 | `?` | text | Help |

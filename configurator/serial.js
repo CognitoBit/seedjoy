@@ -209,10 +209,22 @@ class SeedJoySerial {
     if (this.connected) await this.sendCommand('stream_buttons');
   }
 
+  /** Ask firmware to stream raw + processed axis values at ~20 Hz (calibration tab) */
+  async startAxisStream() {
+    if (this.connected) await this.sendCommand('stream_axes');
+  }
+
+  /** Stop firmware axis streaming */
+  async stopAxisStream() {
+    if (this.connected) await this.sendCommand('stop_axes');
+  }
+
   /** Stop firmware button state streaming */
   async stopButtonStream() {
     if (this.connected) await this.sendCommand('stop_stream');
   }
+
+  isConnected() { return this.connected; }
 
   getDeviceName() {
     return this.port?.getInfo()?.usbProductId 

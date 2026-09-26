@@ -21,6 +21,11 @@ void AxesProcessor::begin(const DeviceConfig* config) {
   
   // Configure ADC resolution (12-bit for nRF52)
   analogReadResolution(12);
+  // Ratiometric reference: pots are fed from 3V3, so VDD/4 x gain 1/4 gives
+  // 0..4095 == 0..VDD exactly (center ~2048). The core's AR_DEFAULT is a
+  // 3.6 V internal reference, which would cap a 3.3 V pot at ~3750 and put
+  // its center near 1877 (well outside the default calibration).
+  analogReference(AR_VDD4);
   
   // Initialize axis pins
   for (int i = 0; i < MAX_AXES; i++) {
