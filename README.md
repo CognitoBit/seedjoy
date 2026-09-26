@@ -77,6 +77,11 @@ XIAO pins are not 5 V tolerant.
 
 Full wiring guide with the 74HC165 pinout: [docs/hardware.md](docs/hardware.md).
 
+**Test board:** a ready-to-fab KiCad board that exercises everything (74HC165 + 8 buttons, chain
+header, DIP switches, on-board thumbstick, external analog header) is in [pcb/](pcb/). See
+[pcb/README.md](pcb/README.md) for the bring-up checklist and [pcb/BOM.md](pcb/BOM.md) for
+India-sourced parts.
+
 ---
 
 ## Build and flash
@@ -206,6 +211,9 @@ reads as stuck pressed, as long as the far-end SER is tied to 3V3.
 - **Windows:** `joy.cpl` (Game Controllers), select SeedJoy, then Properties
 - **Linux:** `jstest /dev/input/js0`
 - **Any OS:** https://hardwaretester.com/gamepad in Chrome
+
+`joy.cpl` and browser gamepad testers display **only the first 32 buttons**. The configurator's
+Button Mapping tab shows all 64. Games and SDL/DirectInput apps read the full report.
 
 ### BLE mode and the 60-second window
 

@@ -8,6 +8,13 @@ Parts: [BOM.md](BOM.md), with jumper settings.
 - [ ] Buy the KY-023 / PS2 joystick module first. Desolder the stick and measure it: the 3 pins of
       each pot are **2.5 mm apart**, and the two pot rows are **8.73 mm from the stick centre**
       (Alps RKJXV1224005 pattern). If your clone differs, stop and report it before ordering.
+- [ ] **1:1 paper-fit test** (catches a mirrored pattern and body pegs that calipers miss):
+      in KiCad, File → Print F.Cu + Edge.Cuts at **100 % scale** and check the board width
+      (130 mm) with a ruler. Push the desoldered stick's legs through the printed pads (from the
+      printed side, stick on top). It must sit **flat**: no plastic pegs hitting the paper, and
+      the X-pot row on top, the Y-pot column on the right, the switch legs at the bottom. The legs
+      should protrude ≥ 2.4 mm below the body to solder through a 1.6 mm board.
+      Repeat for the DIP switch, one tactile switch, RN1 and the XIAO socket pitch.
 
 ## Before powering up (bare board, multimeter)
 
@@ -38,14 +45,18 @@ Parts: [BOM.md](BOM.md), with jumper settings.
 - [ ] **Pin Config → Number of chips = 1**, Invert Logic **ticked** → **Write to Device**.
       (The firmware default is 7 chips. With 7, this board's buttons show up as HID 49–56.)
 - [ ] **Button Mapping** tab: BTN1…BTN8 light up as indicators 1…8. Idle = all dark.
+      Use this tab as the ground truth. **Windows `joy.cpl` and browser gamepad testers only
+      show the first 32 buttons**, so at the default 7 chips (HID 49–56) the board would look dead
+      there. That's another reason to set chips = 1 first.
 
 ## Analog
 
 1. Fit **J8 on 1-2** (X from the on-board stick) and **J4 on row 1** (X → A0).
    Fit **J9 on 1-2** and **J5 on row 2** (Y → A1). *Never put J4 and J5 on the same row.*
 2. Pin Config: enable **Axis 0** (pin A0) and **Axis 1** (pin A1) → Write.
-3. Axis Calibration: centre raw ≈ 2048 at rest, ≈ 0 / 4095 at the ends (ratiometric ADC).
-   Run min/center/max calibration → Write.
+3. Axis Calibration: raw ≈ 2048 at rest. PS2-style sticks usually **don't reach 0 / 4095** at
+   the ends (often ~300–3800). That's normal, and the calibration exists for it:
+   run min/center/max → Write.
 4. External sensor: move J8 (or J9) to **2-3**, plug the sensor into **J3** (GND, 3V3, X, Y, SW).
    **3.3 V only.** Use a 3.3 V-capable hall sensor (e.g. SS49E / DRV5055A1 at 3.3 V).
 5. **J6 on** means the stick push button (on-board or J3 SW) acts as BTN8.
