@@ -237,8 +237,8 @@ BUTTONS: 0b0000000000001101 (0x000D)
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| pin | uint8 | varies | ADC pin number (0x02-0x29) |
-| enabled | bool | true | Axis enabled |
+| pin | uint8 | 0–3 | Arduino analog pin (0 = A0 … 3 = A3), see Pin Numbers |
+| enabled | bool | false | Axis enabled (off by default; floating ADC pins cause noise) |
 | inverted | bool | false | Invert axis direction |
 | min | uint16 | 0 | Calibrated minimum (0-4095) |
 | center | uint16 | 2048 | Calibrated center (0-4095) |
@@ -253,37 +253,33 @@ BUTTONS: 0b0000000000001101 (0x000D)
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| pin | uint8 | varies | GPIO pin number |
-| enabled | bool | true | Button enabled |
+| pin | uint8 | 4, 5, 10, 255… | Arduino pin number, see Pin Numbers |
+| enabled | bool | false | Button enabled (off by default; SR-only mode) |
 | logicalNumber | uint8 | index | Logical button number (0-15) |
 | inverted | bool | false | Invert logic (HIGH=pressed) |
 
 ## Pin Numbers
 
-Pin numbers correspond to nRF52840 port pins:
+All `pin`, `dataPin`, `clockPin` and `loadPin` values are **Arduino pin numbers** for the Seeed
+XIAO nRF52840 core, i.e. the numbers the firmware passes straight to `pinMode()` /
+`digitalRead()` / `analogRead()`. They are **not** nRF52840 GPIO (P0.xx / P1.xx) numbers.
+`255` (`0xFF`) means "not used".
 
-| Pin Label | Pin Number (hex) | Function |
-|-----------|------------------|----------|
-| A0 | 0x02 | P0.02 (ADC) |
-| A1 | 0x03 | P0.03 (ADC) |
-| A2 | 0x28 | P0.28 (ADC) |
-| A3 | 0x29 | P0.29 (ADC) |
-| D1 | 0x04 | P0.04 |
-| D2 | 0x05 | P0.05 |
-| D3 | 0x06 | P0.06 |
-| D4 | 0x07 | P0.07 |
-| D5 | 0x08 | P0.08 |
-| D6 | 0x09 | P0.09 |
-| D7 | 0x0A | P0.10 |
-| D8 | 0x0B | P0.11 |
-| D9 | 0x0C | P0.12 |
-| D10 | 0x0D | P0.13 |
-| MOSI | 0x1A | P0.26 |
-| MISO | 0x1B | P0.27 |
-| SCK | 0x1E | P0.30 |
-| TX | 0x1F | P0.31 |
-| RX | 0x00 | P0.00 |
-| SCL | 0x01 | P0.01 |
+| Value | XIAO pin | nRF52840 port | Default use |
+|-------|----------|---------------|-------------|
+| 0  | A0 / D0 | P0.02 | Axis 0 |
+| 1  | A1 / D1 | P0.03 | Axis 1 |
+| 2  | A2 / D2 | P0.28 | Axis 2 |
+| 3  | A3 / D3 | P0.29 | Axis 3 |
+| 4  | D4 (SDA) | P0.04 | GPIO button (disabled) |
+| 5  | D5 (SCL) | P0.05 | GPIO button (disabled) |
+| 6  | D6 (TX) | P1.11 | 74HC165 data (QH) |
+| 7  | D7 (RX) | P1.12 | 74HC165 clock |
+| 8  | D8 (SCK) | P1.13 | 74HC165 load (SH/LD) |
+| 9  | D9 (MISO) | P1.14 | Mode select, don't assign |
+| 10 | D10 (MOSI) | P1.15 | GPIO button (disabled) |
+
+Only values 0–3 are valid for axes (ADC-capable pins wired to the XIAO header).
 
 ## CRC32 Calculation
 

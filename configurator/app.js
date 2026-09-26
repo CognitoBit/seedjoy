@@ -684,9 +684,9 @@ function updateUIFromConfig() {
 
     // Re-populate pin dropdowns (they may not have been filled yet on first load)
     const availablePins = SeedJoyConfig.getAvailablePins();
-    populatePinDropdown('shift-reg-data-pin',  availablePins, sr.dataPin  ?? 0x2B);
-    populatePinDropdown('shift-reg-clock-pin', availablePins, sr.clockPin ?? 0x2C);
-    populatePinDropdown('shift-reg-load-pin',  availablePins, sr.loadPin  ?? 0x2D);
+    populatePinDropdown('shift-reg-data-pin',  availablePins, sr.dataPin  ?? 6);
+    populatePinDropdown('shift-reg-clock-pin', availablePins, sr.clockPin ?? 7);
+    populatePinDropdown('shift-reg-load-pin',  availablePins, sr.loadPin  ?? 8);
 
     // ── Axes ──────────────────────────────────────────────────────────────
     if (cfg.axes) {
@@ -718,13 +718,35 @@ function updateUIFromConfig() {
 }
 
 /**
+ * Older configurator builds stored pins as pseudo "P-number" hex values
+ * (A0=0x02, A2=0x28, D6=0x2B, ...) that the firmware does not understand.
+ * Convert such a saved config to Arduino pin numbers (D0..D10 = 0..10).
+ */
+function migrateLegacyPins(cfg) {
+    const LEGACY = { 0x02: 0, 0x03: 1, 0x28: 2, 0x29: 3, 0x04: 4, 0x05: 5,
+                     0x2B: 6, 0x2C: 7, 0x2D: 8, 0x2E: 9, 0x2F: 10 };
+    const sr = cfg.shiftRegisters || {};
+    const pins = [sr.dataPin, sr.clockPin, sr.loadPin,
+                  ...(cfg.axes || []).map(a => a.pin),
+                  ...(cfg.buttons || []).map(b => b.pin)];
+    // Values 0x28..0x2F only exist in the legacy scheme.
+    if (!pins.some(p => p >= 0x28 && p <= 0x2F)) return cfg;
+    const fix = p => (p in LEGACY ? LEGACY[p] : p);
+    ['dataPin', 'clockPin', 'loadPin'].forEach(k => { if (k in sr) sr[k] = fix(sr[k]); });
+    (cfg.axes || []).forEach(a => { a.pin = fix(a.pin); });
+    (cfg.buttons || []).forEach(b => { b.pin = fix(b.pin); });
+    console.log('Migrated saved config from legacy pin numbering');
+    return cfg;
+}
+
+/**
  * Load config from localStorage
  */
 function loadLocalConfig() {
     try {
         const savedConfig = localStorage.getItem('seedjoy-config');
         if (savedConfig) {
-            const parsed = JSON.parse(savedConfig);
+            const parsed = migrateLegacyPins(JSON.parse(savedConfig));
             if (config.validateConfig(parsed)) {
                 config.config = parsed;
                 updateUIFromConfig();

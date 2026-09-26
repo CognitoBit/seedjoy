@@ -21,7 +21,9 @@ cd firmware/seedjoy
 # Build with FFB enabled (default build has it OFF and is the normal input device)
 ~/bin/arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840 \
   --build-property "compiler.cpp.extra_flags=-DENABLE_FFB=1" --output-dir build_ffb .
-# Flash: double-tap RESET on the XIAO, then drag build_ffb/seedjoy.ino.zip to the XIAO-BOOT drive,
+# Flash: make a UF2 and copy it to the bootloader drive (double-tap RESET on the XIAO first):
+#   python3 ~/Library/Arduino15/packages/Seeeduino/hardware/nrf52/*/tools/uf2conv/uf2conv.py \
+#     -f 0xADA52840 -c -o build_ffb/seedjoy.uf2 build_ffb/seedjoy.ino.hex
 # or:
 ~/bin/arduino-cli upload -p /dev/cu.usbmodem* --fqbn Seeeduino:nrf52:xiaonRF52840 --input-dir build_ffb .
 ```

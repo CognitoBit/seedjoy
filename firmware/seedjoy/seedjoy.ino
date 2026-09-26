@@ -5,16 +5,16 @@
  * 
  * Features:
  * - 4 analog axes with calibration and curves
- * - 16 digital buttons with debouncing
- * - Manual mode selection (USB or BLE)
- * - Web-based configuration via BLE
- * - Persistent configuration in Flash
- * 
+ * - Up to 56 buttons via 74HC165 shift registers (debounced)
+ * - Boot-time mode selection on D9 (USB or BLE)
+ * - Web-based configuration via Web Serial or WebBluetooth
+ * - Persistent configuration in Flash (LittleFS)
+ *
  * Hardware:
  * - Seeed Studio XIAO nRF52840
  * - 4x potentiometers on A0-A3
- * - 16x buttons on digital pins
- * - Mode select button on D0
+ * - 74HC165 chain on D6 (data) / D7 (clock) / D8 (load)
+ * - Mode select on D9 (floating/HIGH = USB, GND at boot = BLE)
  */
 
 // Development flags
@@ -107,8 +107,8 @@ void setup() {
   // Initialize LEDs
   pinMode(STATUS_LED_PIN, OUTPUT);
   pinMode(CONNECTION_LED_PIN, OUTPUT);
-  digitalWrite(STATUS_LED_PIN, HIGH);  // Turn on status LED during init
-  digitalWrite(CONNECTION_LED_PIN, LOW);
+  digitalWrite(STATUS_LED_PIN, LED_ON);  // Turn on status LED during init
+  digitalWrite(CONNECTION_LED_PIN, LED_OFF);
   
   // Initialize storage
   Serial.println("Initializing storage...");
@@ -146,8 +146,8 @@ void setup() {
 #endif
     if (usbHID.begin(&deviceConfig)) {
       Serial.println("USB HID initialized successfully");
-      digitalWrite(STATUS_LED_PIN, LOW);   // Turn off status LED
-      digitalWrite(CONNECTION_LED_PIN, HIGH); // Turn on connection LED
+      digitalWrite(STATUS_LED_PIN, LED_OFF);   // Turn off status LED
+      digitalWrite(CONNECTION_LED_PIN, LED_ON); // Turn on connection LED
 #if ENABLE_FFB
       ffbMotor.begin();
       Serial.println("FFB runtime active (USB PID) - UNVALIDATED, see docs/ffb-plan.md");
@@ -183,7 +183,7 @@ void setup() {
       Serial.println("Waiting for connection...");
       Serial.println("========================================");
       Serial.println("");
-      digitalWrite(STATUS_LED_PIN, LOW);   // Turn off status LED
+      digitalWrite(STATUS_LED_PIN, LED_OFF);   // Turn off status LED
       // Connection LED will be controlled by BLE connection status
     } else {
       Serial.println("BLE HID initialization failed!");
@@ -240,7 +240,7 @@ void loop() {
   
   // Update connection LED for BLE
   if (currentMode == MODE_BLE) {
-    digitalWrite(CONNECTION_LED_PIN, bleHID.isConnected() ? HIGH : LOW);
+    digitalWrite(CONNECTION_LED_PIN, bleHID.isConnected() ? LED_ON : LED_OFF);
     
     // Update axis monitoring for configurator (only when connected)
     if (bleHID.isConnected()) {
@@ -485,9 +485,9 @@ float readVBAT() {
 
 void blinkStatus(int times) {
   for (int i = 0; i < times; i++) {
-    digitalWrite(STATUS_LED_PIN, HIGH);
+    digitalWrite(STATUS_LED_PIN, LED_ON);
     delay(200);
-    digitalWrite(STATUS_LED_PIN, LOW);
+    digitalWrite(STATUS_LED_PIN, LED_OFF);
     delay(200);
   }
 }
@@ -524,8 +524,14 @@ void handleBLEConfigMode() {
   
   // Auto-enable HID after timeout if still in config mode
   if (configurationMode && isConnected) {
-    // Check if mode button is held (stay in config mode)
-    bool modeButtonHeld = digitalRead(MODE_SELECT_PIN) == LOW;
+    // Check if mode button is held (stay in config mode).
+    // D9 is also held LOW at boot to select BLE. Only treat LOW as a "hold" once
+    // D9 has been released (read HIGH) since boot — otherwise a jumper/latching
+    // switch to GND would keep HID disabled forever.
+    static bool modePinReleased = false;
+    bool modePinLow = digitalRead(MODE_SELECT_PIN) == LOW;
+    if (!modePinLow) modePinReleased = true;
+    bool modeButtonHeld = modePinLow && modePinReleased;
     
     uint32_t elapsedTime = millis() - bleConnectionTime;
     

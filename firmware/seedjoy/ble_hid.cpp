@@ -54,6 +54,10 @@ bool BLEHIDController::begin(const DeviceConfig* config) {
   if (!Bluefruit.begin()) {
     return false;
   }
+
+  // The sketch drives the blue LED itself (and the XIAO LED is active-low,
+  // which Bluefruit's auto LED gets backwards), so stop Bluefruit touching it.
+  Bluefruit.autoConnLed(false);
   
   // Disable BLE security/bonding to prevent reconnection issues
   // HID devices shouldn't require pairing - it causes OS pairing cache problems

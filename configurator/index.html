@@ -291,11 +291,12 @@
                         </select>
                     </label>
                     <label>
-                        <input type="checkbox" id="shift-reg-inverted"> Invert Logic
+                        <input type="checkbox" id="shift-reg-inverted"> Invert Logic (LOW = pressed)
                     </label>
                     <p class="hint">
                         📌 Default pins: D6 (data), D7 (clock), D8 (load)<br>
-                        Shift register buttons start at button 16+ (direct buttons 0-15)
+                        Keep "Invert Logic" ON for the standard wiring (10k pull-up, switch to GND).<br>
+                        SR-only mode: SR buttons are 1–56. If any direct GPIO button is enabled, SR buttons shift to 17+ (and the last 8 of a 7-chip chain are dropped).
                     </p>
                 </div>
 

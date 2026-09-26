@@ -15,6 +15,37 @@ bool StorageManager::begin() {
   return true;
 }
 
+// Older configurator builds wrote pseudo nRF "P-number" pin values (e.g. D6 as
+// 0x2B = 43) that are not valid Arduino pins on the XIAO (D0..D10 = 0..10).
+// Repair any such value so a board flashed with this firmware works again
+// without the user having to rewrite its config.
+static void sanitizePins(DeviceConfig* config) {
+  const uint8_t MAX_XIAO_PIN = 10;  // D10
+  bool fixed = false;
+  ShiftRegisterConfig& sr = config->shiftRegisters;
+  if ((sr.dataPin  > MAX_XIAO_PIN && sr.dataPin  != 0xFF) ||
+      (sr.clockPin > MAX_XIAO_PIN && sr.clockPin != 0xFF) ||
+      (sr.loadPin  > MAX_XIAO_PIN && sr.loadPin  != 0xFF)) {
+    sr.dataPin = SR_DATA_PIN; sr.clockPin = SR_CLOCK_PIN; sr.loadPin = SR_LOAD_PIN;
+    fixed = true;
+  }
+  const uint8_t axisDefaults[MAX_AXES] = { AXIS_0_PIN, AXIS_1_PIN, AXIS_2_PIN, AXIS_3_PIN };
+  for (int i = 0; i < MAX_AXES; i++) {
+    if (config->axes[i].pin > A3 && config->axes[i].pin != 0xFF) {
+      config->axes[i].pin = axisDefaults[i];
+      fixed = true;
+    }
+  }
+  for (int i = 0; i < MAX_BUTTONS; i++) {
+    if (config->buttons[i].pin > MAX_XIAO_PIN && config->buttons[i].pin != 0xFF) {
+      config->buttons[i].pin = 0xFF;
+      config->buttons[i].enabled = false;
+      fixed = true;
+    }
+  }
+  if (fixed) Serial.println("Repaired invalid pin numbers in stored config");
+}
+
 bool StorageManager::loadConfig(DeviceConfig* config) {
   if (!config) return false;
   
@@ -23,6 +54,7 @@ bool StorageManager::loadConfig(DeviceConfig* config) {
     // Validate the loaded config
     if (validateConfig(config)) {
       Serial.println("Config loaded from Flash");
+      sanitizePins(config);
       return true;
     } else {
       Serial.println("Config validation failed");

@@ -28,15 +28,15 @@ class SeedJoyConfig {
             usbPollRate: 1,
             
             // BLE settings
-            bleConnInterval: 2,
+            bleConnInterval: 6,  // 1.25 ms units; 6 = 7.5 ms (BLE minimum)
             bleTxPower: 0,
             
             // Axes (4 axes)
             axes: [
-                this.getDefaultAxis(0, 0x02),  //  A0 / P0.02
-                this.getDefaultAxis(1, 0x03),  // A1 / P0.03
-                this.getDefaultAxis(2, 0x28),  // A2 / P0.28
-                this.getDefaultAxis(3, 0x29)   // A3 / P0.29
+                this.getDefaultAxis(0, 0),  // A0 / D0 / P0.02
+                this.getDefaultAxis(1, 1),  // A1 / D1 / P0.03
+                this.getDefaultAxis(2, 2),  // A2 / D2 / P0.28
+                this.getDefaultAxis(3, 3)   // A3 / D3 / P0.29
             ],
             
             // Buttons (16 buttons)
@@ -46,10 +46,10 @@ class SeedJoyConfig {
             shiftRegisters: {
                 enabled: true,
                 numChips: 7,
-                dataPin: 0x2B,   // D6 / P1.11 (TX) - default data pin
-                clockPin: 0x2C,  // D7 / P1.12 (RX) - default clock pin
-                loadPin: 0x2D,   // D8 / P1.13 (SCK) - default load pin
-                inverted: false
+                dataPin: 6,   // D6 / P1.11 (TX) - default data pin
+                clockPin: 7,  // D7 / P1.12 (RX) - default clock pin
+                loadPin: 8,   // D8 / P1.13 (SCK) - default load pin
+                inverted: true   // pull-up + switch to GND: LOW = pressed
             },
             
             // Power management
@@ -85,9 +85,9 @@ class SeedJoyConfig {
      */
     getDefaultButtons() {
         const buttonPins = [
-            0x04,  // D4 / P0.04 (SDA)
-            0x05,  // D5 / P0.05 (SCL)
-            0x2F,  // D10 / P1.15 (MOSI)
+            4,   // D4 / P0.04 (SDA)
+            5,   // D5 / P0.05 (SCL)
+            10,  // D10 / P1.15 (MOSI)
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF,  // Unused (reserved for shift registers)
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
             0xFF, 0xFF, 0xFF
@@ -253,50 +253,30 @@ class SeedJoyConfig {
      * Get pin name from pin number
      */
     static getPinName(pinNum) {
-        const pinMap = {
-            0x02: 'A0 (P0.02)',
-            0x03: 'A1 (P0.03)',
-            0x28: 'A2 (P0.28)',
-            0x29: 'A3 (P0.29)',
-            0x04: 'D1 (P0.04)',
-            0x05: 'D2 (P0.05)',
-            0x06: 'D3 (P0.06)',
-            0x07: 'D4 (P0.07)',
-            0x08: 'D5 (P0.08)',
-            0x09: 'D6 (P0.09)',
-            0x0A: 'D7 (P0.10)',
-            0x0B: 'D8 (P0.11)',
-            0x0C: 'D9 (P0.12)',
-            0x0D: 'D10 (P0.13)',
-            0x1A: 'MOSI (P0.26)',
-            0x1B: 'MISO (P0.27)',
-            0x1E: 'SCK (P0.30)',
-            0x1F: 'TX (P0.31)',
-            0x00: 'RX (P0.00)',
-            0x01: 'SCL (P0.01)',
-            0xFF: 'Not Used'
-        };
-        return pinMap[pinNum] || `Pin 0x${pinNum.toString(16)}`;
+        const pin = SeedJoyConfig.getAvailablePins().find(p => p.value === pinNum);
+        return pin ? pin.label : `Pin ${pinNum}`;
     }
     
     /**
      * Get all available pins
      */
     static getAvailablePins() {
-        // Based on official XIAO nRF52840 pinout
+        // Values are Arduino pin numbers (D0..D10 = 0..10), exactly what the
+        // firmware passes to pinMode()/digitalRead()/analogRead() on the
+        // Seeed XIAO nRF52840 core. Do NOT use nRF GPIO (P0.xx/P1.xx) numbers.
         // Reference: https://wiki.seeedstudio.com/XIAO_BLE/
         return [
-            { value: 0x02, label: 'A0/D0 (P0.02)' },
-            { value: 0x03, label: 'A1/D1 (P0.03)' },
-            { value: 0x28, label: 'A2/D2 (P0.28)' },
-            { value: 0x29, label: 'A3/D3 (P0.29)' },
-            { value: 0x04, label: 'D4/SDA (P0.04)' },
-            { value: 0x05, label: 'D5/SCL (P0.05)' },
-            { value: 0x2B, label: 'D6/TX (P1.11)' },
-            { value: 0x2C, label: 'D7/RX (P1.12)' },
-            { value: 0x2D, label: 'D8/SCK (P1.13)' },
-            { value: 0x2E, label: 'D9/MISO (P1.14)' },
-            { value: 0x2F, label: 'D10/MOSI (P1.15)' },
+            { value: 0,  label: 'A0/D0 (P0.02)' },
+            { value: 1,  label: 'A1/D1 (P0.03)' },
+            { value: 2,  label: 'A2/D2 (P0.28)' },
+            { value: 3,  label: 'A3/D3 (P0.29)' },
+            { value: 4,  label: 'D4/SDA (P0.04)' },
+            { value: 5,  label: 'D5/SCL (P0.05)' },
+            { value: 6,  label: 'D6/TX (P1.11)' },
+            { value: 7,  label: 'D7/RX (P1.12)' },
+            { value: 8,  label: 'D8/SCK (P1.13)' },
+            { value: 9,  label: 'D9/MISO (P1.14) - mode select' },
+            { value: 10, label: 'D10/MOSI (P1.15)' },
             { value: 0xFF, label: 'Not Used' }
         ];
     }

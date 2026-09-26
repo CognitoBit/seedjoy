@@ -31,6 +31,10 @@
 #define MODE_SELECT_PIN D9  // P1.14 (MISO) - Hold LOW for BLE, HIGH for USB on boot
 #define STATUS_LED_PIN LED_RED    // P0.26 (red LED)
 #define CONNECTION_LED_PIN LED_BLUE  // P0.06 (blue LED)
+// The XIAO nRF52840's RGB LED is common-anode: LOW = lit. (The Seeed variant's
+// LED_STATE_ON is 1, which is wrong for this board, so don't rely on it.)
+#define LED_ON  LOW
+#define LED_OFF HIGH
 
 // Analog axes (4 axes on dedicated ADC pins)
 #define AXIS_0_PIN A0  // D0 = P0.02 (ADC1)
@@ -114,14 +118,16 @@ struct ShiftRegisterConfig {
   uint8_t dataPin;          // Data pin (SER_OUT / Q7)
   uint8_t clockPin;         // Clock pin (CLK)
   uint8_t loadPin;          // Latch/Load pin (SH/LD)
-  bool inverted;            // Invert button logic
+  bool inverted;            // true = input LOW means pressed (pull-up + switch to GND)
   
   // Defaults (using predefined SR_ pins)
   // SR-only mode: 7 chips = 56 buttons (covers up to ~50 physical buttons)
   ShiftRegisterConfig() :
     enabled(true), numChips(7),
     dataPin(D6), clockPin(D7), loadPin(D8),
-    inverted(false) {}
+    // Standard wiring is a 10k pull-up per input with the switch to GND, so a
+    // pressed button reads LOW -> invert so pressed = 1 in the HID report.
+    inverted(true) {}
 };
 
 // Device configuration (stored in Flash)

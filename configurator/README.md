@@ -69,7 +69,7 @@ Open browser to: `http://localhost:8000`
 
 1. Ensure your SeedJoy is powered on and in BLE mode
 2. Click **Connect Device** button
-3. Select **SeedJoy-XXXX** from the device list
+3. Select **SeedJoy** (the configured device name) from the device list
 4. Allow pairing if prompted
 
 ### 2. Read Configuration
@@ -134,7 +134,7 @@ Navigate through tabs to configure:
 
 ### "No device found"
 - Ensure SeedJoy is powered on and in BLE mode
-- Check mode select switch (D0 should be LOW/GND)
+- Check the mode select: D9 must be connected to GND at boot for BLE mode
 - Move closer to device (within 10m)
 - Reset device and try again
 

@@ -2,8 +2,9 @@
 # SeedJoy Firmware Upload Script
 
 set -e
+cd "$(dirname "$0")"
 
-ARDUINO_CLI="$HOME/bin/arduino-cli"
+ARDUINO_CLI="${ARDUINO_CLI:-$(command -v arduino-cli || echo "$HOME/bin/arduino-cli")}"
 FQBN="Seeeduino:nrf52:xiaonRF52840"
 BUILD_DIR="build"
 
@@ -19,22 +20,22 @@ if [ ! -d "$BUILD_DIR" ]; then
 fi
 
 # Check if arduino-cli exists
-if [ ! -f "$ARDUINO_CLI" ]; then
+if [ ! -x "$ARDUINO_CLI" ]; then
     echo "Error: arduino-cli not found at $ARDUINO_CLI"
     exit 1
 fi
 
-# Find USB port
-PORT=$(ls /dev/cu.usbmodem* 2>/dev/null | head -1)
+# Find USB port (macOS: cu.usbmodem*, Linux: ttyACM*); override with PORT=...
+PORT="${PORT:-$(ls /dev/cu.usbmodem* /dev/ttyACM* 2>/dev/null | head -1)}"
 
 if [ -z "$PORT" ]; then
     echo "No USB device found!"
     echo ""
     echo "Alternative upload method:"
-    echo "  1. Double-click reset button on XIAO nRF52840"
-    echo "  2. A drive named 'XIAO' or 'XIAO-SENSE' will appear"
-    echo "  3. Drag '$BUILD_DIR/seedjoy.ino.zip' to that drive"
-    echo "  4. Board will automatically reboot with new firmware"
+    echo "  1. Double-tap the RESET button on the XIAO nRF52840"
+    echo "  2. A USB drive appears (the UF2 bootloader)"
+    echo "  3. Copy '$BUILD_DIR/seedjoy.uf2' onto that drive"
+    echo "  4. The board reboots into the new firmware automatically"
     exit 1
 fi
 
@@ -42,7 +43,13 @@ echo "Found device on: $PORT"
 echo "Uploading firmware..."
 echo ""
 
-$ARDUINO_CLI upload -p "$PORT" --fqbn "$FQBN" --input-dir "$BUILD_DIR" .
+# NRFUTIL=/path/to/adafruit-nrfutil overrides Seeed's bundled x86_64 binary
+# (needed on Apple Silicon Macs without Rosetta).
+EXTRA=()
+[ -n "$NRFUTIL" ] && EXTRA+=(--upload-property "cmd=$NRFUTIL" \
+                             --upload-property "cmd.macosx=$NRFUTIL")
+
+"$ARDUINO_CLI" upload -p "$PORT" --fqbn "$FQBN" --input-dir "$BUILD_DIR" "${EXTRA[@]}" .
 
 echo ""
 echo "====================================="

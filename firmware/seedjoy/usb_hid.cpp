@@ -89,7 +89,17 @@ bool USBHIDController::begin(const DeviceConfig* config) {
   // Set output report callback (for receiving data from host)
   usb_hid_.setReportCallback(nullptr, hidReportCallback);
 #endif
-  
+
+  // The nRF52 core starts TinyUSB (CDC only) before setup() runs, so by now the
+  // host has usually enumerated us as a plain serial port. Force a re-enumeration
+  // so the host sees the HID interface and the VID/PID/product strings set above.
+  // (The serial port drops and reappears once here.)
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
+
   // Wait for USB to be ready (with timeout)
   uint32_t start = millis();
   while (!TinyUSBDevice.mounted() && millis() - start < 3000) {
