@@ -32,3 +32,18 @@ build/
 # Node (if using web dev tools)
 node_modules/
 package-lock.json
+
+# Personal notes (not committed)
+*.local.md
+
+# KiCad (local state, locks, backups, routing scratch)
+pcb/.history/
+*.lck
+*.kicad_prl
+fp-info-cache
+*-backups/
+pcb/*.dsn
+pcb/*.ses
+pcb/*.freerouting.log
+# Loose Gerbers are regenerated; the zip in pcb/ is the fab deliverable
+pcb/gerbers/

@@ -1,0 +1,4 @@
+(fp_lib_table
+  (version 7)
+
+  (lib (name "seedjoy") (type "KiCad") (uri "${KIPRJMOD}/seedjoy.pretty") (options "") (descr "")))
