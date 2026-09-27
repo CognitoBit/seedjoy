@@ -30,12 +30,11 @@ Evelta `https://evelta.com/search.php?search_query=<query>`
 
 ## Order plan (for someone who already has the XIAO, headers, 74HC165 + socket, R and C)
 
-**Order 1: Sharvi Electronics (covers everything left)**
+**Order 1: Sharvi Electronics (everything except the tactile switches)**
 
 | Ref | Buy | Qty (incl. spares) | Link |
 |-----|-----|-----|------|
 | RN1 | 10k Ohm 9-pin resistor network (SIP) | 2 | [sharvielectronics.com](https://sharvielectronics.com/product/10k-ohm-9-pin-resistor-network-sip/) |
-| SW1–SW8 | 6x6x5 mm tactile push button, DIP | 10 | [sharvielectronics.com](https://sharvielectronics.com/product/6x6x5mm-tactile-push-button-switch-black-dip-package-2/) |
 | SW9 | DIP switch, 4 way | 1 | [sharvielectronics.com](https://sharvielectronics.com/product/dip-switch-4-way/) |
 | U2 | Dual Axis XY Joystick Module (desolder the stick) | 2 | [sharvielectronics.com](https://sharvielectronics.com/product/dual-axis-xy-joystick-module/) |
 | jumpers | Jumper cap 2.54 mm | 6 | [sharvielectronics.com](https://sharvielectronics.com/product/jumper-cap-2-54-mm-pitch-black/) |
@@ -45,7 +44,17 @@ Buy 2 joystick modules: one to desolder for the paper-fit test (pcb/README.md), 
 Don't substitute their "Thumb Joystick Switch XY Dual Axis 4 Way Direction" listing without
 checking it: its page gives no specs, and "4-way" may be a digital navigation switch.
 
-**Order 2 (backup if Sharvi is out of stock)**
+**Order 2: Robocraze (tactile switches, 4-pin only)**
+
+| Ref | Buy | Qty | Link |
+|-----|-----|-----|------|
+| SW1–SW8 | 4-pin DIP 6x6x5 mm tactile switch (pack of 10) | 1 pack | [robocraze.com](https://robocraze.com/products/4-pins-dip-momentary-square-tactile-push-button-switch-10-pieces-6x6x5mm) |
+
+The footprint has **4 pads (6.5 x 4.5 mm)**, so a 2-pin tactile switch won't fit. Sharvi's
+6x6x5 "DIP Package" listing is 2-pin; don't use it. Alternative: [Robu 6x6x5 (pack of 20)](https://robu.in/product/6x6x5mm-tactile-push-button-switch-pack-of-20/),
+but confirm it's 4-pin in the photos before ordering.
+
+**Backups (if Sharvi is out of stock)**
 
 | Part | Alternatives |
 |------|--------------|
