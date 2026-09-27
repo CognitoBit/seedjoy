@@ -28,6 +28,34 @@ Evelta `https://evelta.com/search.php?search_query=<query>`
 | (on J4, J5, J6, J8, J9) | 5 | 2.54 mm jumper caps (shunts) | Buy a pack | [Robu](https://robu.in/?s=jumper+cap+2.54&post_type=product) |
 | H1–H4 | 4 | M3 nylon standoff + screw set | | [Robu](https://robu.in/?s=m3+standoff&post_type=product) |
 
+## Order plan (for someone who already has the XIAO, headers, 74HC165 + socket, R and C)
+
+**Order 1: Sharvi Electronics (covers everything left)**
+
+| Ref | Buy | Qty (incl. spares) | Link |
+|-----|-----|-----|------|
+| RN1 | 10k Ohm 9-pin resistor network (SIP) | 2 | [sharvielectronics.com](https://sharvielectronics.com/product/10k-ohm-9-pin-resistor-network-sip/) |
+| SW1–SW8 | 6x6x5 mm tactile push button, DIP | 10 | [sharvielectronics.com](https://sharvielectronics.com/product/6x6x5mm-tactile-push-button-switch-black-dip-package-2/) |
+| SW9 | DIP switch, 4 way | 1 | [sharvielectronics.com](https://sharvielectronics.com/product/dip-switch-4-way/) |
+| U2 | Dual Axis XY Joystick Module (desolder the stick) | 2 | [sharvielectronics.com](https://sharvielectronics.com/product/dual-axis-xy-joystick-module/) |
+| jumpers | Jumper cap 2.54 mm | 6 | [sharvielectronics.com](https://sharvielectronics.com/product/jumper-cap-2-54-mm-pitch-black/) |
+| H1–H4 | M3 x 10 mm male-female nylon hex spacer (+ 4 M3 nuts) | 4 | [sharvielectronics.com](https://sharvielectronics.com/product/m3x10mm-male-to-female-nylon-hex-spacer/) |
+
+Buy 2 joystick modules: one to desolder for the paper-fit test (pcb/README.md), one spare.
+Don't substitute their "Thumb Joystick Switch XY Dual Axis 4 Way Direction" listing without
+checking it: its page gives no specs, and "4-way" may be a digital navigation switch.
+
+**Order 2 (backup if Sharvi is out of stock)**
+
+| Part | Alternatives |
+|------|--------------|
+| 10k 9-pin network | [RoboComp](https://robocomp.in/product/10k-ohm-9-pin-resistor-network-sip/), [Kitsguru](https://kitsguru.com/products/a103j-network-resistance-9-pin-10k) |
+| 4-way DIP switch | [Robu (pack of 3)](https://robu.in/product/4-way-slide-switch-2-54mm-pitch-pack-of-3/), [REES52](https://rees52.com/products/4-position-dip-switch-rs224) |
+| Joystick module | [Robu](https://robu.in/product/joystick-module-ps2-breakout-sensor/), [REES52](https://rees52.com/products/ps2-joystick-module-dual-axis-xy-analog-joystick-breakout), [Robocraze](https://robocraze.com/products/joystick-module) |
+| M3 standoffs | [REES52 320-pc M3 nylon kit](https://rees52.com/products/320pcs-m3-male-female-spacer-standoff-kit-320pcs-m3-male-female-nylon-hex-spacer-standoff-screw-nut-assorted-assortment-kit-black-rs1806) |
+
+**PCB:** upload `seedjoy_testboard_gerbers.zip` to JLCPCB or PCBWay (both ship to India).
+
 ## Jumper settings
 
 | Jumper | Setting | Effect |
